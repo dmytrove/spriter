@@ -6,6 +6,84 @@
   <style>
     body { margin: 0; overflow: hidden; }
     canvas { display: block; }
+
+    /* --- UI Enhancements & Transitions --- */
+
+    /* Offcanvas Panel - Ensure smooth transition (Bootstrap default is usually good) */
+    .offcanvas {
+      transition: transform .3s ease-in-out !important; /* Ensure our transition preference is respected */
+    }
+
+    /* Accordion Sections - Smooth collapse/expand */
+    .accordion-button {
+      transition: background-color .15s ease-in-out, color .15s ease-in-out, box-shadow .15s ease-in-out;
+    }
+    .accordion-collapse {
+      transition: height .3s ease-in-out, opacity .25s ease-in-out .05s; /* opacity delay to sync with height */
+    }
+     .accordion-item .collapsing { /* Bootstrap class during transition */
+      opacity: 0.5;
+      height: 0 !important; /* Override inline style during collapse */
+      display: block !important;
+    }
+    .accordion-body {
+      transition: opacity .25s ease-in-out .1s;
+    }
+
+
+    /* Button Interactions - Hover and Active/Click effects */
+    .btn {
+      transition: transform 0.1s ease-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, filter 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    }
+
+    .btn:hover {
+      transform: scale(1.03); /* Slightly enlarge on hover */
+      filter: brightness(1.1); /* Make a bit brighter */
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+
+    .btn:active {
+      transform: scale(0.97); /* Slightly shrink on click */
+      filter: brightness(0.9); /* Make a bit darker */
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    /* Specific buttons for emphasis if needed */
+    #startRecordingBtn:hover { filter: brightness(1.15); }
+    #stopRecordingBtn:hover { filter: brightness(1.15); }
+    #applyPresetBtn:hover { filter: brightness(1.15); }
+    #savePresetBtn:hover { filter: brightness(1.15); }
+
+
+    /* Control Feedback - Subtle highlight on change */
+    .control-changed {
+      animation: highlight-change 0.7s ease-out;
+    }
+    .form-range.control-changed::-webkit-slider-thumb {
+      animation: highlight-thumb-webkit 0.7s ease-out;
+    }
+    .form-range.control-changed::-moz-range-thumb {
+      animation: highlight-thumb-moz 0.7s ease-out;
+    }
+
+
+    @keyframes highlight-change {
+      0% { box-shadow: 0 0 0px rgba(0, 123, 255, 0); }
+      50% { box-shadow: 0 0 8px rgba(0, 123, 255, 0.5); }
+      100% { box-shadow: 0 0 0px rgba(0, 123, 255, 0); }
+    }
+    @keyframes highlight-thumb-webkit {
+      0% { box-shadow: 0 0 0px rgba(0, 123, 255, 0); }
+      50% { box-shadow: 0 0 8px 2px rgba(0, 123, 255, 0.5); } /* Make thumb shadow more prominent */
+      100% { box-shadow: 0 0 0px rgba(0, 123, 255, 0); }
+    }
+    @keyframes highlight-thumb-moz {
+      0% { box-shadow: 0 0 0px rgba(0, 123, 255, 0); }
+      50% { box-shadow: 0 0 8px 2px rgba(0, 123, 255, 0.5); }
+      100% { box-shadow: 0 0 0px rgba(0, 123, 255, 0); }
+    }
+
+
     /* Compact controls tweaks */
     .offcanvas-body .form-label { font-size: 0.9em; margin-bottom: 0.1em; }
     .offcanvas-body .form-control,
@@ -105,6 +183,21 @@
               </div>
               <div class="mt-2">
                 <span id="recordingStatus" class="fw-bold"></span>
+              </div>
+
+              <!-- Presets -->
+              <div class="mt-3 border-top pt-2">
+                <h6 class="mb-1">Presets</h6>
+                <div class="input-group input-group-sm mb-2">
+                  <select id="presetSelect" class="form-select form-select-sm">
+                    <option value="" selected>Select Preset...</option>
+                  </select>
+                  <button id="applyPresetBtn" class="btn btn-outline-secondary btn-sm" type="button">Apply</button>
+                </div>
+                <div class="input-group input-group-sm">
+                  <input type="text" id="savePresetNameInput" class="form-control form-control-sm" placeholder="New Preset Name">
+                  <button id="savePresetBtn" class="btn btn-outline-primary btn-sm" type="button">Save Current</button>
+                </div>
               </div>
             </div>
           </div>
@@ -401,6 +494,7 @@
     <span id="diagnosticMessage"></span>
   </div>
   <script type="module">
+    // --- Three.js Library Imports ---
     import * as THREE from 'three';
     import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
     import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
@@ -415,210 +509,124 @@
     import { VignetteShader } from 'three/examples/jsm/shaders/VignetteShader.js';
     import { FilmPass } from 'three/examples/jsm/postprocessing/FilmPass.js';
 
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-    camera.position.z = 5;
+    // --- Global Variables & Constants ---
 
-    let renderer;
+    // Core Three.js Scene Components
+    let scene;                      // THREE.Scene: The main scene graph.
+    let camera;                     // THREE.PerspectiveCamera: The camera used to view the scene.
+    let displayRenderer;            // THREE.WebGLRenderer: Used for live on-screen rendering.
+    let recordingRenderer;          // THREE.WebGLRenderer: Used for off-screen rendering during CCapture.
+    let composer;                   // EffectComposer: Manages post-processing passes.
 
-    function createRenderer({ width, height, preserveDrawingBuffer } = {}) {
+    // Postprocessing Passes
+    // These are declared globally to be easily added/removed or updated by setupPostprocessing.
+    let renderPass, bloomPass, afterimagePass, halftonePass, dotScreenPass, 
+        rgbShiftPass, sepiaPass, vignettePass, filmPass, outputPass;
+
+    // Recording State & Configuration
+    let capturer;                   // CCapture.js instance for video recording.
+    let isRecording = false;        // Boolean: Flag indicating if recording is active.
+    let frameCount = 0;             // Number: Current frame number during recording.
+    let RECORD_FPS = 60;            // Number: Target frames per second for recording.
+    let RECORD_WIDTH = 1920;        // Number: Target width for recorded video.
+    let RECORD_HEIGHT = 1080;       // Number: Target height for recorded video.
+
+    // Emoji & Arrangement State
+    let N = 10;                                 // Number: Count of emojis to display.
+    let sprites = [];                           // Array<THREE.Mesh>: Holds all emoji sprite meshes.
+    let rotationSpeeds = [];                    // Array<Number>: Individual random rotation speeds for sprites.
+    let velocities = [];                        // Array<Object{x,y,z}>: Individual velocities for sprites in 'random' mode.
+    let baseScales = [];                        // Array<Number>: Base scales for sprites, used for relative zoom.
+    let arrangeMode = 'grid';                   // String: Current arrangement mode ('grid' or 'random').
+    let currentSetData = null;                  // Object: Data from the loaded emoji set JSON file.
+    let currentSetFile = null;                  // String: Filename of the current emoji set.
+    let currentGroupKey = null;                 // String: Key for the current emoji group within the set file.
+    const textureCache = { '32': {}, '72': {}, '128': {}, '512': {} }; // Object: Caches loaded emoji textures by resolution and filename.
+    const emojiSetCache = {};                   // Object: Caches loaded emoji set JSON files by filename.
+    let spriteResFolders = [];                  // Array<String>: Caches the last resolution folder used per sprite for optimization.
+    let alignmentObjectMesh = null;             // THREE.Mesh: Mesh for visualizing 3D alignment patterns (torus, sphere, etc.).
+    let emojiSetFiles = [];                     // Array<String>: Stores available emoji set filenames from 'assets/sets.json'.
+
+    // Presets Configuration
+    let savedPresets = {};                      // Object: Stores user-saved presets.
+    const initialPresets = {                  // Object: Default built-in presets.
+      "Dynamic Swirl": {
+        emojiCountInput: 50, gridPatternSelect: "swirl", gridScaleInput: 0.8, nodeAnimPatternPos: "sine",
+        nodeAnimPosAmp: 0.5, nodeAnimPosFreq: 0.5, rotationToggle: true, rotationPattern: "pulse",
+        zoomToggle: true, zoomPattern: "sin", bloomToggle: true, bloomStrength: 1.2,
+        afterimageToggle: true, afterimageDamp: 0.92,
+      },
+      "Calm Grid": {
+        emojiCountInput: 20, arrangeMode: "grid", gridPatternSelect: "normal", gridSpacingInput: 0.1,
+        gridScaleInput: 1, emojiSizeInput: 0.8, rotationToggle: false, zoomToggle: false,
+        nodeAnimPatternPos: "none", bloomToggle: true, bloomStrength: 0.5, bloomRadius: 0.8,
+        bloomThreshold: 0.9, afterimageToggle: false,
+      },
+      "Retro Look": {
+        emojiCountInput: 30, gridPatternSelect: "hstripes", gridScaleInput: 0.9, nodeAnimPatternPos: "diagonal",
+        nodeAnimPosAmp: 0.2, nodeAnimPosFreq: 0.2, rotationToggle: true, rotationPattern: "constant",
+        zoomToggle: true, zoomPattern: "pulse", halftoneToggle: true, halftoneRadius: 8,
+        sepiaToggle: true, sepiaAmount: 0.7, filmToggle: true, filmNoiseIntensity: 0.2,
+        filmScanlinesIntensity: 0.3, bloomToggle: false, afterimageToggle: false,
+      }
+    };
+
+    // UI Element References (cached in `cacheDOMElements` for quick access)
+    const ui = {}; 
+
+    // --- Helper Functions ---
+
+    /** Global THREE.TextureLoader instance. */
+    const loader = new THREE.TextureLoader();
+
+    /**
+     * Creates a WebGLRenderer instance with specified options.
+     * @param {object} options - Configuration options.
+     * @returns {THREE.WebGLRenderer} Configured renderer instance.
+     */
+    function createRendererInstance(options = {}) {
       const r = new THREE.WebGLRenderer({
-        antialias: true,
-        preserveDrawingBuffer: preserveDrawingBuffer || false
+        antialias: options.antialias === undefined ? true : options.antialias,
+        preserveDrawingBuffer: options.preserveDrawingBuffer || false
       });
-      r.setPixelRatio(1);
-      r.setSize(width, height, false);
+      r.setPixelRatio(options.pixelRatio || window.devicePixelRatio); 
+      r.setSize(options.width || window.innerWidth, options.height || window.innerHeight, false);
       r.outputColorSpace = THREE.SRGBColorSpace;
       return r;
     }
-
-    // Initial renderer for display
-    renderer = createRenderer({
-      width: window.innerWidth,
-      height: window.innerHeight,
-      preserveDrawingBuffer: false
-    });
-    document.body.appendChild(renderer.domElement);
-
-    let capturer;
-    let isRecording = false;
-    let frameCount = 0;
-    let RECORD_FPS = 60;
-    let RECORD_WIDTH = 1920;
-    let RECORD_HEIGHT = 1080;
-
-    // Cache structure: { [folder]: { [filename]: texture } }
-    const textureCache = { '32': {}, '72': {}, '128': {}, '512': {} };
-
-    // Move loader to top-level scope for global access
-    const loader = new THREE.TextureLoader();
-
-    // Postprocessing pipeline setup
-    let composer, renderPass, bloomPass, afterimagePass, halftonePass, dotScreenPass, rgbShiftPass, sepiaPass, vignettePass, filmPass, outputPass;
-    function setupPostprocessing() {
-      composer = new EffectComposer(renderer);
-      renderPass = new RenderPass(scene, camera);
-      composer.addPass(renderPass);
-      // Bloom
-      bloomPass = new UnrealBloomPass(
-        new THREE.Vector2(window.innerWidth, window.innerHeight),
-        parseFloat(document.getElementById('bloomStrength').value),
-        parseFloat(document.getElementById('bloomRadius').value),
-        parseFloat(document.getElementById('bloomThreshold').value)
-      );
-      // Afterimage
-      afterimagePass = new AfterimagePass();
-      afterimagePass.uniforms['damp'].value = parseFloat(document.getElementById('afterimageDamp').value);
-      // Halftone
-      halftonePass = new HalftonePass({ radius: parseInt(document.getElementById('halftoneRadius').value) });
-      // DotScreen
-      dotScreenPass = new ShaderPass(DotScreenShader);
-      dotScreenPass.uniforms['scale'].value = parseFloat(document.getElementById('dotscreenScale').value);
-      dotScreenPass.uniforms['angle'].value = parseFloat(document.getElementById('dotscreenAngle').value);
-      dotScreenPass.uniforms['center'].value.set(
-        parseFloat(document.getElementById('dotscreenCenterX').value),
-        parseFloat(document.getElementById('dotscreenCenterY').value)
-      );
-      // RGBShift
-      rgbShiftPass = new ShaderPass(RGBShiftShader);
-      // Sepia
-      sepiaPass = new ShaderPass(SepiaShader);
-      // Vignette
-      vignettePass = new ShaderPass(VignetteShader);
-      // Film
-      filmPass = new FilmPass(0.35);
-      // Output
-      outputPass = new OutputPass();
-      // Add passes based on UI
-      if (document.getElementById('bloomToggle').checked) composer.addPass(bloomPass);
-      if (document.getElementById('afterimageToggle').checked) composer.addPass(afterimagePass);
-      if (document.getElementById('halftoneToggle').checked) composer.addPass(halftonePass);
-      if (document.getElementById('dotscreenToggle').checked) composer.addPass(dotScreenPass);
-      if (document.getElementById('rgbshiftToggle').checked) composer.addPass(rgbShiftPass);
-      if (document.getElementById('sepiaToggle').checked) composer.addPass(sepiaPass);
-      if (document.getElementById('vignetteToggle').checked) composer.addPass(vignettePass);
-      if (document.getElementById('filmToggle').checked) composer.addPass(filmPass);
-      composer.addPass(outputPass);
-    }
-    setupPostprocessing();
-    // Re-setup postprocessing when toggles/params change
-    ['bloomToggle','afterimageToggle','halftoneToggle','dotscreenToggle','rgbshiftToggle','sepiaToggle','vignetteToggle','filmToggle','bloomThreshold','bloomStrength','bloomRadius','afterimageDamp','halftoneRadius',
-     'dotscreenScale','dotscreenAngle','dotscreenCenterX','dotscreenCenterY'].forEach(id => {
-      document.getElementById(id).addEventListener('input', setupPostprocessing);
-    });
-    window.addEventListener('resize', () => {
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      composer.setSize(window.innerWidth, window.innerHeight);
-      bloomPass.setSize(window.innerWidth, window.innerHeight);
-    });
-
-    // Improved: Select best resolution folder based on actual on-screen pixel width
-    function selectResolutionFolder(emojiScale, emojiPosition = new THREE.Vector3(0,0,0)) {
-      // Project two points: the emoji center, and a point offset by emojiScale in X
-      const width = renderer.domElement.width;
-      const cameraPos = emojiPosition.clone();
-      const cam = camera;
-      if (!cam) return '128'; // fallback
-      const p1 = cameraPos.clone();
-      const p2 = cameraPos.clone().add(new THREE.Vector3(emojiScale, 0, 0));
-      p1.project(cam);
-      p2.project(cam);
-      const sx1 = (p1.x * 0.5 + 0.5) * width;
-      const sx2 = (p2.x * 0.5 + 0.5) * width;
-      const pixelWidth = Math.abs(sx2 - sx1);
-      if (pixelWidth <= 40) return '32';
-      if (pixelWidth <= 100) return '72';
-      if (pixelWidth <= 200) return '128';
-      return '512';
+    
+    /**
+     * Parses "mm:ss" duration string to seconds.
+     * @param {string} str - Duration string.
+     * @returns {number} Duration in seconds.
+     */
+    function parseDuration(str) {
+        const m = str.match(/^(\d{1,2}):(\d{2})$/);
+        if (!m) return 0;
+        return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
     }
 
-    // Set initial values for dimension controls
-    document.getElementById('widthInput').value = RECORD_WIDTH;
-    document.getElementById('heightInput').value = RECORD_HEIGHT;
-
-    document.getElementById('fpsInput').addEventListener('change', (e) => {
-      if (!isRecording) {
-        RECORD_FPS = parseInt(e.target.value) || 60;
-        syncRecordTimeFields('fps');
-      }
-    });
-    document.getElementById('widthInput').addEventListener('change', (e) => {
-      if (!isRecording) {
-        RECORD_WIDTH = parseInt(e.target.value) || window.innerWidth;
-      }
-    });
-    document.getElementById('heightInput').addEventListener('change', (e) => {
-      if (!isRecording) {
-        RECORD_HEIGHT = parseInt(e.target.value) || window.innerHeight;
-      }
-    });
-
-    function startRecording() {
-      // Hide UI overlays for clean video
-      document.getElementById('recordingOffcanvas').style.display = 'none';
-      document.getElementById('diagnosticOverlay').style.display = 'none';
-      renderer.setSize(RECORD_WIDTH, RECORD_HEIGHT, false);
-      renderer.setPixelRatio(1);
-      capturer = new CCapture({
-        format: 'webm',
-        framerate: RECORD_FPS,
-        quality: 100,
-        verbose: false,
-        name: 'emoji-sprites',
-        display: true
-      });
-      capturer.start();
-      isRecording = true;
-      frameCount = 0;
-      document.getElementById('recordingStatus').textContent = `Recording... (${RECORD_WIDTH}x${RECORD_HEIGHT} @ ${RECORD_FPS}fps)`;
-      document.getElementById('recordingStatus').classList.remove('text-danger');
-      document.getElementById('recordingStatus').classList.add('text-success');
-      document.getElementById('startRecordingBtn').disabled = true;
-      document.getElementById('stopRecordingBtn').disabled = false;
-      document.getElementById('fpsInput').disabled = true;
-      document.getElementById('widthInput').disabled = true;
-      document.getElementById('heightInput').disabled = true;
-      console.log('Recording started');
+    /**
+     * Formats seconds into "mm:ss" string.
+     * @param {number} secs - Duration in seconds.
+     * @returns {string} Formatted duration string.
+     */
+    function formatDuration(secs) {
+        const m = Math.floor(secs / 60);
+        const s = secs % 60;
+        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
     }
-
-    function stopRecording() {
-      isRecording = false;
-      capturer.stop();
-      capturer.save(null, 'emoji-sprites.webm');
-      // Restore UI overlays
-      document.getElementById('recordingOffcanvas').style.display = '';
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.setPixelRatio(window.devicePixelRatio);
-      document.getElementById('recordingStatus').textContent = 'Recording stopped and saved.';
-      document.getElementById('recordingStatus').classList.remove('text-success');
-      document.getElementById('recordingStatus').classList.add('text-danger');
-      document.getElementById('startRecordingBtn').disabled = false;
-      document.getElementById('stopRecordingBtn').disabled = true;
-      document.getElementById('fpsInput').disabled = false;
-      document.getElementById('widthInput').disabled = false;
-      document.getElementById('heightInput').disabled = false;
-    }
-
-    document.getElementById('startRecordingBtn').addEventListener('click', startRecording);
-    document.getElementById('stopRecordingBtn').addEventListener('click', stopRecording);
-    document.getElementById('stopRecordingBtn').disabled = true;
-
-    // Load emoji sets from assets/sets.json
-    async function loadEmojiSetList() {
-      const response = await fetch('assets/sets.json');
-      if (!response.ok) throw new Error('Failed to load assets/sets.json');
-      return await response.json(); // array of filenames
-    }
-    async function loadEmojiSetFile(filename) {
-      const response = await fetch(`assets/sets/${filename}`);
-      if (!response.ok) throw new Error(`Failed to load assets/sets/${filename}`);
-      return await response.json();
-    }
-
-    // Helper to get n random unique elements from an array
+    
+    /**
+     * Selects `n` random unique elements from an array.
+     * @param {Array<any>} arr - Source array.
+     * @param {number} n - Number of elements to select.
+     * @returns {Array<any>} Array of selected elements.
+     */
     function getRandomElements(arr, n) {
       const result = [];
       const taken = new Set();
+      if (n > arr.length) n = arr.length;
       while (result.length < n && taken.size < arr.length) {
         const idx = Math.floor(Math.random() * arr.length);
         if (!taken.has(idx)) {
@@ -629,32 +637,44 @@
       return result;
     }
 
+    /**
+     * Retrieves or loads and caches a texture.
+     * @param {string} filename - Texture filename.
+     * @param {string} folder - CDN resolution folder.
+     * @returns {THREE.Texture} Loaded or cached texture.
+     */
     function getCachedTexture(filename, folder) {
-      if (textureCache[folder][filename]) return textureCache[folder][filename];
-      // Use jsdelivr CDN for emoji PNGs
+      if (!filename || !folder) {
+          console.warn('getCachedTexture: filename or folder is undefined. Using fallback.');
+          const fallbackCanvas = document.createElement('canvas');
+          fallbackCanvas.width = 1; fallbackCanvas.height = 1;
+          const fallbackTexture = new THREE.Texture(fallbackCanvas);
+          fallbackTexture.needsUpdate = true;
+          return fallbackTexture;
+      }
+      if (textureCache[folder]?.[filename]) return textureCache[folder][filename];
+      
       const url = `https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji/png/${folder}/${filename}`;
-      const tex = loader.load(
-        url,
-        undefined,
-        undefined,
-        (err) => {
-          // On error, use fallback
-          console.warn('Missing emoji PNG, using fallback:', url);
-          // Create a 1x1 transparent texture as fallback
-          const fallback = new THREE.Texture(document.createElement('canvas'));
-          fallback.needsUpdate = true;
-          fallback.minFilter = THREE.LinearFilter;
-          fallback.magFilter = THREE.LinearFilter;
-          textureCache[folder][filename] = fallback;
+      const tex = loader.load(url, undefined, undefined, (err) => {
+          console.warn('Missing emoji PNG, using fallback:', url, err);
+          const fallbackCanvas = document.createElement('canvas');
+          fallbackCanvas.width = 1; fallbackCanvas.height = 1; 
+          const fallbackTexture = new THREE.Texture(fallbackCanvas);
+          fallbackTexture.needsUpdate = true;
+          if(textureCache[folder]) textureCache[folder][filename] = fallbackTexture;
         }
       );
       tex.minFilter = THREE.LinearFilter;
       tex.magFilter = THREE.LinearFilter;
-      textureCache[folder][filename] = tex;
+      if(textureCache[folder]) textureCache[folder][filename] = tex;
       return tex;
     }
 
-    // Async check if a PNG exists by attempting to load it
+    /**
+     * Checks if an image exists at a URL.
+     * @param {string} url - Image URL.
+     * @returns {Promise<boolean>} True if image exists, false otherwise.
+     */
     function checkImageExists(url) {
       return new Promise((resolve) => {
         const img = new window.Image();
@@ -664,1009 +684,1112 @@
       });
     }
 
-    // Filter emoji filenames to only those whose PNGs exist
+    /**
+     * Filters emoji filenames to include only existing images on CDN.
+     * @param {string[]} filenames - Array of emoji filenames.
+     * @param {string} folder - CDN resolution folder.
+     * @returns {Promise<string[]>} Filtered array of existing filenames.
+     */
     async function filterExistingEmojiFilenames(filenames, folder) {
-      // Use jsdelivr CDN for emoji PNGs
+      if (!filenames || filenames.length === 0) return [];
       const checks = await Promise.all(
-        filenames.map(fn => checkImageExists(`https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji/png/${folder}/${fn}`))
+        filenames.map(fn => fn ? checkImageExists(`https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji/png/${folder}/${fn}`) : Promise.resolve(false))
       );
       return filenames.filter((fn, i) => checks[i]);
     }
-
-    async function main() {
-      let emojiSetFiles = await loadEmojiSetList(); // array of filenames
-      const emojiSetFileSelect = document.getElementById('emojiSetFileSelect');
-      const emojiGroupSelect = document.getElementById('emojiGroupSelect');
-      emojiSetFileSelect.innerHTML = '';
-      emojiSetFiles.forEach(filename => {
-        const opt = document.createElement('option');
-        opt.value = filename;
-        opt.textContent = filename.replace(/\.json$/, '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-        emojiSetFileSelect.appendChild(opt);
-      });
-      // Store loaded emoji sets in a cache
-      const emojiSetCache = {};
-      // Helper to get group keys from a set file
-      function getGroupKeysFromSet(setData) {
-        if (Array.isArray(setData)) return ['default'];
-        if (typeof setData === 'object' && setData !== null) return Object.keys(setData);
-        return [];
-      }
-      // Helper to get emoji list for a group
-      function getEmojiListFromSet(setData, groupKey) {
-        if (Array.isArray(setData)) return setData;
-        if (typeof setData === 'object' && setData !== null) {
-          let val = setData[groupKey];
-          if (Array.isArray(val)) return val;
-          if (typeof val === 'string') return val.split(';').map(e => e.trim()).filter(Boolean);
-          return [];
-        }
-        return [];
-      }
-      // Track current set data
-      let currentSetData = null;
-      let currentSetFile = null;
-      let currentGroupKey = null;
-      // Populate group dropdown for a set file
-      async function populateGroupDropdown(setFile) {
-        if (!emojiSetCache[setFile]) {
-          emojiSetCache[setFile] = await loadEmojiSetFile(setFile);
-        }
-        currentSetData = emojiSetCache[setFile];
-        currentSetFile = setFile;
-        const groupKeys = getGroupKeysFromSet(currentSetData);
-        emojiGroupSelect.innerHTML = '';
-        groupKeys.forEach(key => {
-          const opt = document.createElement('option');
-          opt.value = key;
-          opt.textContent = key.charAt(0).toUpperCase() + key.slice(1);
-          emojiGroupSelect.appendChild(opt);
-        });
-        // Select first group by default
-        currentGroupKey = groupKeys[0];
-        emojiGroupSelect.value = currentGroupKey;
-      }
-      // Helper to get emoji filenames for current group
-      function getFilenamesForCurrentGroup() {
-        const emojiList = getEmojiListFromSet(currentSetData, currentGroupKey);
-        if (!emojiList) return [];
-        return emojiList.map(e => {
-          if (!e) return undefined;
-          // Support multi-codepoint emojis
-          const codepoints = Array.from(e).map(c => c.codePointAt(0).toString(16)).join('_');
-          return `emoji_u${codepoints}.png`;
-        }).filter(Boolean);
-      }
-      // Controls
-      const emojiCountInput = document.getElementById('emojiCountInput');
-      const emojiSizeInput = document.getElementById('emojiSizeInput');
-      const gridSpacingInput = document.getElementById('gridSpacingInput');
-      const gridPatternSelect = document.getElementById('gridPatternSelect');
-      const nodeAnimPatternPos = document.getElementById('nodeAnimPatternPos');
-      const nodeAnimPatternZoom = document.getElementById('nodeAnimPatternZoom');
-      const nodeAnimPatternRot = document.getElementById('nodeAnimPatternRot');
-      const nodeAnimPosAmp = document.getElementById('nodeAnimPosAmp');
-      const nodeAnimPosFreq = document.getElementById('nodeAnimPosFreq');
-      const nodeAnimPosPhase = document.getElementById('nodeAnimPosPhase');
-      const nodeAnimZoomAmp = document.getElementById('nodeAnimZoomAmp');
-      const nodeAnimZoomFreq = document.getElementById('nodeAnimZoomFreq');
-      const nodeAnimZoomPhase = document.getElementById('nodeAnimZoomPhase');
-      const nodeAnimRotAmp = document.getElementById('nodeAnimRotAmp');
-      const nodeAnimRotFreq = document.getElementById('nodeAnimRotFreq');
-      const nodeAnimRotPhase = document.getElementById('nodeAnimRotPhase');
-      const rotationToggle = document.getElementById('rotationToggle');
-      const rotationEasing = document.getElementById('rotationEasing');
-      const rotationPattern = document.getElementById('rotationPattern');
-      const resetRotationBtn = document.getElementById('resetRotationBtn');
-      const zoomToggle = document.getElementById('zoomToggle');
-      const zoomEasing = document.getElementById('zoomEasing');
-      const zoomPattern = document.getElementById('zoomPattern');
-      const resetZoomBtn = document.getElementById('resetZoomBtn');
-      const zoomAddendumInput = document.getElementById('zoomAddendumInput');
-      const rotationWeight = document.getElementById('rotationWeight');
-      const zoomWeight = document.getElementById('zoomWeight');
-      const gridScaleInput = document.getElementById('gridScaleInput');
-      const gridScaleNumber = document.getElementById('gridScaleNumber');
-      // Arrangement mode
-      let arrangeMode = 'grid';
-      document.querySelectorAll('input[name="arrangeMode"]').forEach(el => {
-        el.addEventListener('change', (e) => {
-          arrangeMode = e.target.value;
-          updateEmojis();
-        });
-      });
-      // Emoji state
-      let N = parseInt(emojiCountInput.value) || 10;
-      let selectedEmojis = [];
-      let sprites = [];
-      let rotationSpeeds = [];
-      let velocities = [];
-      let baseScales = [];
-      // Update emoji selection and sprites
-      async function updateEmojis() {
-        // Remove old sprites
-        sprites.forEach(sprite => scene.remove(sprite));
-        N = parseInt(emojiCountInput.value) || 10;
-        const allFiles = getFilenamesForCurrentGroup();
-        // Determine emoji scale and resolution folder
-        let emojiScale;
-        if (arrangeMode === 'grid') {
-          const scaleFactor = parseFloat(gridScaleInput.value) || 1;
-          emojiScale = (parseFloat(emojiSizeInput.value) || 1) * scaleFactor;
-        } else {
-          emojiScale = 1; // random mode: use default
-        }
-        // Use center as representative position
-        const resFolder = selectResolutionFolder(emojiScale, new THREE.Vector3(0,0,0));
-        // Only use files that exist
-        const filteredFiles = await filterExistingEmojiFilenames(allFiles, resFolder);
-        sprites = [];
-        rotationSpeeds = [];
-        velocities = [];
-        baseScales = [];
-        // Fill missing nodes if needed
-        if (sprites.length < N) {
-          // Get current emoji group selection
-          const groupKey = emojiGroupSelect.value;
-          const filteredFiles = getFilenamesForCurrentGroup();
-          // Add as many as needed
-          const needed = N - sprites.length;
-          const newEmojis = getRandomElements(filteredFiles, needed);
-          for (let i = 0; i < needed; i++) {
-            const filename = newEmojis[i % newEmojis.length];
-            if (!filename) {
-              console.warn('Skipped undefined filename when filling grid at index', i);
-              continue;
-            }
-            const texture = getCachedTexture(filename, resFolder);
-            const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true, alphaTest: 0.01 });
-            const mesh = new THREE.Mesh(new THREE.PlaneGeometry(emojiScale, emojiScale), material);
-            scene.add(mesh);
-            sprites.push(mesh);
-            rotationSpeeds.push((Math.random() - 0.5) * 0.1);
-            velocities.push({x: 0, y: 0, z: 0});
-          }
-        } else if (sprites.length > N) {
-          // Remove extra sprites
-          for (let i = sprites.length - 1; i >= N; i--) {
-            scene.remove(sprites[i]);
-            sprites.splice(i, 1);
-            rotationSpeeds.splice(i, 1);
-            velocities.splice(i, 1);
-          }
-        }
-        const pattern = gridPatternSelect.value;
-        const nodeAnimPattern = {
-          pos: nodeAnimPatternPos.value,
-          zoom: nodeAnimPatternZoom.value,
-          rot: nodeAnimPatternRot.value
-        };
-        const nodeAnimParams = {
-          pos: {
-            amp: parseFloat(nodeAnimPosAmp.value) || 0,
-            freq: parseFloat(nodeAnimPosFreq.value) || 1,
-            phase: parseFloat(nodeAnimPosPhase.value) || 0
-          },
-          zoom: {
-            amp: parseFloat(nodeAnimZoomAmp.value) || 0,
-            freq: parseFloat(nodeAnimZoomFreq.value) || 1,
-            phase: parseFloat(nodeAnimZoomPhase.value) || 0
-          },
-          rot: {
-            amp: parseFloat(nodeAnimRotAmp.value) || 0,
-            freq: parseFloat(nodeAnimRotFreq.value) || 1,
-            phase: parseFloat(nodeAnimRotPhase.value) || 0
-          }
-        };
-        let i = 0;
-        if (pattern === 'normal') {
-          for (let row = 0; row < N; row++) {
-            for (let col = 0; col < N; col++) {
-              if (i >= sprites.length) break;
-              const x = -N / 2 + col;
-              const y = N / 2 - row;
-              sprites[i].userData.grid = {row, col, x, y};
-              sprites[i].position.set(x, y, 0);
-              sprites[i].scale.set(emojiScale, emojiScale, 1);
-              velocities[i] = {x: 0, y: 0, z: 0};
-              i++;
-            }
-          }
-        } else if (pattern === 'hstripes') {
-          for (let row = 0; row < N; row++) {
-            for (let col = 0; col < N; col++) {
-              if (i >= sprites.length) break;
-              const x = -N / 2 + col;
-              const y = N / 2 - row;
-              sprites[i].userData.grid = {row, col, x, y};
-              sprites[i].position.set(x, y, 0);
-              sprites[i].scale.set(emojiScale, emojiScale, 1);
-              velocities[i] = {x: 0, y: 0, z: 0};
-              i++;
-            }
-          }
-        } else if (pattern === 'vstripes') {
-          for (let row = 0; row < N; row++) {
-            for (let col = 0; col < N; col++) {
-              if (i >= sprites.length) break;
-              const x = -N / 2 + col;
-              const y = N / 2 - row;
-              sprites[i].userData.grid = {row, col, x, y};
-              sprites[i].position.set(x, y, 0);
-              sprites[i].scale.set(emojiScale, emojiScale, 1);
-              velocities[i] = {x: 0, y: 0, z: 0};
-              i++;
-            }
-          }
-        } else if (pattern === 'swirl') {
-          // Swirl: helix in 3D
-          const turns = 2;
-          for (let i = 0; i < sprites.length; i++) {
-            const t = i / sprites.length;
-            const angle = t * turns * Math.PI * 2;
-            const radius = 4;
-            const height = 6 * (t - 0.5);
-            const x = Math.cos(angle) * radius;
-            const y = height;
-            const z = Math.sin(angle) * radius;
-            sprites[i].position.set(x, y, z);
-            sprites[i].scale.set(emojiScale, emojiScale, 1);
-            velocities[i] = {x: 0, y: 0, z: 0};
-            const resFolder = selectResolutionFolder(emojiScale, new THREE.Vector3(x, y, z));
-            const filename = filteredFiles[i % filteredFiles.length];
-            sprites[i].material.map = getCachedTexture(filename, resFolder);
-            sprites[i].material.needsUpdate = true;
-            // Orient mesh to surface normal
-            const normal = getSurfaceNormal('swirl', x, y, z, t);
-            if (normal) sprites[i].lookAt(sprites[i].position.clone().add(normal));
-          }
-        } else if (pattern === 'torus') {
-          // Torus: ring in 3D
-          const R = 4, r = 1.2;
-          for (let i = 0; i < sprites.length; i++) {
-            const t = i / sprites.length;
-            const angle = t * Math.PI * 2;
-            const phi = t * Math.PI * 4; // twist
-            const x = (R + r * Math.cos(phi)) * Math.cos(angle);
-            const y = r * Math.sin(phi);
-            const z = (R + r * Math.cos(phi)) * Math.sin(angle);
-            sprites[i].position.set(x, y, z);
-            sprites[i].scale.set(emojiScale, emojiScale, 1);
-            velocities[i] = {x: 0, y: 0, z: 0};
-            const resFolder = selectResolutionFolder(emojiScale, new THREE.Vector3(x, y, z));
-            const filename = filteredFiles[i % filteredFiles.length];
-            sprites[i].material.map = getCachedTexture(filename, resFolder);
-            sprites[i].material.needsUpdate = true;
-            // Orient mesh to surface normal
-            const normal = getSurfaceNormal('torus', x, y, z, t);
-            if (normal) sprites[i].lookAt(sprites[i].position.clone().add(normal));
-          }
-        } else if (pattern === 'spiral') {
-          // Spiral: conical spiral in 3D
-          const turns = 3;
-          for (let i = 0; i < sprites.length; i++) {
-            const t = i / sprites.length;
-            const angle = t * turns * Math.PI * 2;
-            const radius = 1 + 4 * t;
-            const height = 6 * (t - 0.5);
-            const x = Math.cos(angle) * radius;
-            const y = height;
-            const z = Math.sin(angle) * radius;
-            sprites[i].position.set(x, y, z);
-            sprites[i].scale.set(emojiScale, emojiScale, 1);
-            velocities[i] = {x: 0, y: 0, z: 0};
-            const resFolder = selectResolutionFolder(emojiScale, new THREE.Vector3(x, y, z));
-            const filename = filteredFiles[i % filteredFiles.length];
-            sprites[i].material.map = getCachedTexture(filename, resFolder);
-            sprites[i].material.needsUpdate = true;
-            // Orient mesh to surface normal
-            const normal = getSurfaceNormal('spiral', x, y, z, t);
-            if (normal) sprites[i].lookAt(sprites[i].position.clone().add(normal));
-          }
-        } else if (pattern === 'sphere') {
-          // Sphere: distribute points on a sphere using the golden spiral
-          const radius = 5;
-          const offset = 2 / sprites.length;
-          const increment = Math.PI * (3 - Math.sqrt(5));
-          for (let i = 0; i < sprites.length; i++) {
-            const y = ((i * offset) - 1) + (offset / 2);
-            const r = Math.sqrt(1 - y * y);
-            const phi = i * increment;
-            const x = Math.cos(phi) * r * radius;
-            const z = Math.sin(phi) * r * radius;
-            sprites[i].position.set(x, y * radius, z);
-            sprites[i].scale.set(emojiScale, emojiScale, 1);
-            velocities[i] = {x: 0, y: 0, z: 0};
-            const resFolder = selectResolutionFolder(emojiScale, new THREE.Vector3(x, y * radius, z));
-            const filename = filteredFiles[i % filteredFiles.length];
-            sprites[i].material.map = getCachedTexture(filename, resFolder);
-            sprites[i].material.needsUpdate = true;
-            // Orient mesh to surface normal
-            const normal = getSurfaceNormal('sphere', x, y * radius, z, t);
-            if (normal) sprites[i].lookAt(sprites[i].position.clone().add(normal));
-          }
-        } else {
-          // 2D patterns: keep facing camera
-          for (let i = 0; i < sprites.length; i++) {
-            sprites[i].lookAt(camera.position);
-          }
-        }
-        arrangeSprites();
-        // Diagnostic overlay if no emojis
-        const overlay = document.getElementById('diagnosticOverlay');
-        const msg = document.getElementById('diagnosticMessage');
-        if (sprites.length === 0) {
-          overlay.style.display = 'flex';
-          msg.textContent = 'No emojis loaded! Check your assets/files.json and emoji images.';
-        } else {
-          overlay.style.display = 'none';
-        }
-      }
-      // Only these should trigger updateEmojis
-      emojiCountInput.addEventListener('change', () => { if (arrangeMode === 'random') updateEmojis(); });
-      emojiSetFileSelect.addEventListener('change', async () => {
-        await populateGroupDropdown(emojiSetFileSelect.value);
-        await updateEmojis();
-      });
-      emojiGroupSelect.addEventListener('change', () => {
-        currentGroupKey = emojiGroupSelect.value;
-        updateEmojis();
-      });
-      // All other controls only rearrange sprites
-      emojiSizeInput.addEventListener('change', arrangeSprites);
-      gridSpacingInput.addEventListener('change', arrangeSprites);
-      gridPatternSelect.addEventListener('change', arrangeSprites);
-      [nodeAnimPatternPos, nodeAnimPatternZoom, nodeAnimPatternRot,
-       nodeAnimPosAmp, nodeAnimPosFreq, nodeAnimPosPhase,
-       nodeAnimZoomAmp, nodeAnimZoomFreq, nodeAnimZoomPhase,
-       nodeAnimRotAmp, nodeAnimRotFreq, nodeAnimRotPhase].forEach(el => {
-         el.addEventListener('change', arrangeSprites);
-       });
-      gridScaleInput.addEventListener('input', () => { gridScaleNumber.value = gridScaleInput.value; arrangeSprites(); });
-      gridScaleNumber.addEventListener('input', () => { gridScaleInput.value = gridScaleNumber.value; arrangeSprites(); });
-      // Arrangement logic
-      async function arrangeSprites() {
-        // Recalculate emojiScale and resFolder for this arrangement
-        let emojiScale;
-        if (arrangeMode === 'grid') {
-          const scaleFactor = parseFloat(gridScaleInput.value) || 1;
-          emojiScale = (parseFloat(emojiSizeInput.value) || 1) * scaleFactor;
-        } else {
-          emojiScale = 1;
-        }
-        // Use center as representative position
-        const resFolder = selectResolutionFolder(emojiScale, new THREE.Vector3(0,0,0));
-        // Only use files that exist
-        const allFiles = getFilenamesForCurrentGroup();
-        const filteredFiles = await filterExistingEmojiFilenames(allFiles, '512');
-        if (arrangeMode === 'grid') {
-          const scaleFactor = parseFloat(gridScaleInput.value) || 1;
-          const margin = (parseFloat(gridSpacingInput.value) || 0.2) * scaleFactor;
-          const aspect = RECORD_WIDTH / RECORD_HEIGHT;
-          const viewHeight = 10;
-          const viewWidth = viewHeight * aspect;
-          const cellSize = emojiScale + margin;
-          const cols = Math.floor((viewWidth + margin) / cellSize);
-          const rows = Math.floor((viewHeight + margin) / cellSize);
-          const gridCount = cols * rows;
-          // Fill missing nodes if needed
-          if (sprites.length < gridCount) {
-            const needed = gridCount - sprites.length;
-            const newEmojis = getRandomElements(filteredFiles, needed);
-            for (let i = 0; i < needed; i++) {
-              const filename = newEmojis[i % newEmojis.length];
-              if (!filename) continue;
-              const texture = getCachedTexture(filename, resFolder);
-              const material = new THREE.SpriteMaterial({ map: texture });
-              const sprite = new THREE.Sprite(material);
-              scene.add(sprite);
-              sprites.push(sprite);
-              rotationSpeeds.push((Math.random() - 0.5) * 0.1);
-              velocities.push({x: 0, y: 0, z: 0});
-            }
-          } else if (sprites.length > gridCount) {
-            for (let i = sprites.length - 1; i >= gridCount; i--) {
-              scene.remove(sprites[i]);
-              sprites.splice(i, 1);
-              rotationSpeeds.splice(i, 1);
-              velocities.splice(i, 1);
-            }
-          }
-          const pattern = gridPatternSelect.value;
-          let i = 0;
-          if (pattern === 'normal') {
-            for (let row = 0; row < rows; row++) {
-              for (let col = 0; col < cols; col++) {
-                if (i >= sprites.length) break;
-                const x = -viewWidth / 2 + margin + col * cellSize + emojiScale / 2;
-                const y = viewHeight / 2 - margin - row * cellSize - emojiScale / 2;
-                sprites[i].userData.grid = {row, col, x, y};
-                sprites[i].position.set(x, y, 0);
-                sprites[i].scale.set(emojiScale, emojiScale, 1);
-                velocities[i] = {x: 0, y: 0, z: 0};
-                // Per-emoji PNG selection
-                const resFolder = selectResolutionFolder(emojiScale, new THREE.Vector3(x, y, 0));
-                const filename = filteredFiles[i % filteredFiles.length];
-                sprites[i].material.map = getCachedTexture(filename, resFolder);
-                sprites[i].material.needsUpdate = true;
-                i++;
-              }
-            }
-          } else if (pattern === 'hstripes') {
-            for (let row = 0; row < rows; row++) {
-              for (let col = 0; col < cols; col++) {
-                if (i >= sprites.length) break;
-                const x = -viewWidth / 2 + margin + col * cellSize + emojiScale / 2;
-                const y = viewHeight / 2 - margin - row * cellSize - emojiScale / 2 + ((row % 2) * cellSize * 0.3);
-                sprites[i].userData.grid = {row, col, x, y};
-                sprites[i].position.set(x, y, 0);
-                sprites[i].scale.set(emojiScale, emojiScale, 1);
-                velocities[i] = {x: 0, y: 0, z: 0};
-                const resFolder = selectResolutionFolder(emojiScale, new THREE.Vector3(x, y, 0));
-                const filename = filteredFiles[i % filteredFiles.length];
-                sprites[i].material.map = getCachedTexture(filename, resFolder);
-                sprites[i].material.needsUpdate = true;
-                i++;
-              }
-            }
-          } else if (pattern === 'vstripes') {
-            for (let row = 0; row < rows; row++) {
-              for (let col = 0; col < cols; col++) {
-                if (i >= sprites.length) break;
-                const x = -viewWidth / 2 + margin + col * cellSize + emojiScale / 2 + ((col % 2) * cellSize * 0.3);
-                const y = viewHeight / 2 - margin - row * cellSize - emojiScale / 2;
-                sprites[i].userData.grid = {row, col, x, y};
-                sprites[i].position.set(x, y, 0);
-                sprites[i].scale.set(emojiScale, emojiScale, 1);
-                velocities[i] = {x: 0, y: 0, z: 0};
-                const resFolder = selectResolutionFolder(emojiScale, new THREE.Vector3(x, y, 0));
-                const filename = filteredFiles[i % filteredFiles.length];
-                sprites[i].material.map = getCachedTexture(filename, resFolder);
-                sprites[i].material.needsUpdate = true;
-                i++;
-              }
-            }
-          } else if (pattern === 'swirl') {
-            // Swirl: helix in 3D
-            const turns = 2;
-            for (let i = 0; i < sprites.length; i++) {
-              const t = i / sprites.length;
-              const angle = t * turns * Math.PI * 2;
-              const radius = 4;
-              const height = 6 * (t - 0.5);
-              const x = Math.cos(angle) * radius;
-              const y = height;
-              const z = Math.sin(angle) * radius;
-              sprites[i].position.set(x, y, z);
-              sprites[i].scale.set(emojiScale, emojiScale, 1);
-              velocities[i] = {x: 0, y: 0, z: 0};
-              const resFolder = selectResolutionFolder(emojiScale, new THREE.Vector3(x, y, z));
-              const filename = filteredFiles[i % filteredFiles.length];
-              sprites[i].material.map = getCachedTexture(filename, resFolder);
-              sprites[i].material.needsUpdate = true;
-              // Orient mesh to surface normal
-              const normal = getSurfaceNormal('swirl', x, y, z, t);
-              if (normal) sprites[i].lookAt(sprites[i].position.clone().add(normal));
-            }
-          } else if (pattern === 'torus') {
-            // Torus: ring in 3D
-            const R = 4, r = 1.2;
-            for (let i = 0; i < sprites.length; i++) {
-              const t = i / sprites.length;
-              const angle = t * Math.PI * 2;
-              const phi = t * Math.PI * 4; // twist
-              const x = (R + r * Math.cos(phi)) * Math.cos(angle);
-              const y = r * Math.sin(phi);
-              const z = (R + r * Math.cos(phi)) * Math.sin(angle);
-              sprites[i].position.set(x, y, z);
-              sprites[i].scale.set(emojiScale, emojiScale, 1);
-              velocities[i] = {x: 0, y: 0, z: 0};
-              const resFolder = selectResolutionFolder(emojiScale, new THREE.Vector3(x, y, z));
-              const filename = filteredFiles[i % filteredFiles.length];
-              sprites[i].material.map = getCachedTexture(filename, resFolder);
-              sprites[i].material.needsUpdate = true;
-              // Orient mesh to surface normal
-              const normal = getSurfaceNormal('torus', x, y, z, t);
-              if (normal) sprites[i].lookAt(sprites[i].position.clone().add(normal));
-            }
-          } else if (pattern === 'spiral') {
-            // Spiral: conical spiral in 3D
-            const turns = 3;
-            for (let i = 0; i < sprites.length; i++) {
-              const t = i / sprites.length;
-              const angle = t * turns * Math.PI * 2;
-              const radius = 1 + 4 * t;
-              const height = 6 * (t - 0.5);
-              const x = Math.cos(angle) * radius;
-              const y = height;
-              const z = Math.sin(angle) * radius;
-              sprites[i].position.set(x, y, z);
-              sprites[i].scale.set(emojiScale, emojiScale, 1);
-              velocities[i] = {x: 0, y: 0, z: 0};
-              const resFolder = selectResolutionFolder(emojiScale, new THREE.Vector3(x, y, z));
-              const filename = filteredFiles[i % filteredFiles.length];
-              sprites[i].material.map = getCachedTexture(filename, resFolder);
-              sprites[i].material.needsUpdate = true;
-              // Orient mesh to surface normal
-              const normal = getSurfaceNormal('spiral', x, y, z, t);
-              if (normal) sprites[i].lookAt(sprites[i].position.clone().add(normal));
-            }
-          } else if (pattern === 'sphere') {
-            // Sphere: distribute points on a sphere using the golden spiral
-            const radius = 5;
-            const offset = 2 / sprites.length;
-            const increment = Math.PI * (3 - Math.sqrt(5));
-            for (let i = 0; i < sprites.length; i++) {
-              const y = ((i * offset) - 1) + (offset / 2);
-              const r = Math.sqrt(1 - y * y);
-              const phi = i * increment;
-              const x = Math.cos(phi) * r * radius;
-              const z = Math.sin(phi) * r * radius;
-              sprites[i].position.set(x, y * radius, z);
-              sprites[i].scale.set(emojiScale, emojiScale, 1);
-              velocities[i] = {x: 0, y: 0, z: 0};
-              const resFolder = selectResolutionFolder(emojiScale, new THREE.Vector3(x, y * radius, z));
-              const filename = filteredFiles[i % filteredFiles.length];
-              sprites[i].material.map = getCachedTexture(filename, resFolder);
-              sprites[i].material.needsUpdate = true;
-              // Orient mesh to surface normal
-              const normal = getSurfaceNormal('sphere', x, y * radius, z, t);
-              if (normal) sprites[i].lookAt(sprites[i].position.clone().add(normal));
-            }
-          } else {
-            // 2D patterns: keep facing camera
-            for (let i = 0; i < sprites.length; i++) {
-              sprites[i].lookAt(camera.position);
-            }
-          }
-        } else {
-          // random mode
-          if (sprites.length < N) {
-            const needed = N - sprites.length;
-            const newEmojis = getRandomElements(filteredFiles, needed);
-            for (let i = 0; i < needed; i++) {
-              const filename = newEmojis[i % newEmojis.length];
-              if (!filename) continue;
-              const resFolder = selectResolutionFolder(emojiScale, new THREE.Vector3(0,0,0));
-              const texture = getCachedTexture(filename, resFolder);
-              const material = new THREE.SpriteMaterial({ map: texture, transparent: true, alphaTest: 0.01 });
-              const sprite = new THREE.Sprite(material);
-              scene.add(sprite);
-              sprites.push(sprite);
-              rotationSpeeds.push((Math.random() - 0.5) * 0.1);
-              velocities.push({x: 0, y: 0, z: 0});
-            }
-          } else if (sprites.length > N) {
-            for (let i = sprites.length - 1; i >= N; i--) {
-              scene.remove(sprites[i]);
-              sprites.splice(i, 1);
-              rotationSpeeds.splice(i, 1);
-              velocities.splice(i, 1);
-            }
-          }
-          sprites.forEach((sprite, index) => {
-            sprite.position.set(
-              (Math.random() - 0.5) * 10,
-              (Math.random() - 0.5) * 10,
-              (Math.random() - 0.5) * 10
-            );
-            const scale = Math.random() * 0.5 + 0.5;
-            sprite.scale.set(scale, scale, 1);
-            velocities[index] = {
-              x: (Math.random() - 0.5) * 0.02,
-              y: (Math.random() - 0.5) * 0.02,
-              z: (Math.random() - 0.5) * 0.02
-            };
-            // Per-emoji PNG selection
-            const resFolder = selectResolutionFolder(scale, sprite.position);
-            const filename = filteredFiles[index % filteredFiles.length];
-            sprite.material.map = getCachedTexture(filename, resFolder);
-            sprite.material.needsUpdate = true;
-          });
-        }
-      }
-      // Initial emoji load
-      await populateGroupDropdown(emojiSetFileSelect.value = emojiSetFiles[0]);
-      updateEmojis();
-
-      function animate() {
-        requestAnimationFrame(animate);
-        let time;
-        if (isRecording) {
-          time = frameCount / RECORD_FPS;
-        } else {
-          time = performance.now() * 0.001;
-        }
-        const rotationEnabled = rotationToggle.checked;
-        const easing = rotationEasing.value;
-        const pattern = rotationPattern.value;
-        const zoomEnabled = zoomToggle.checked;
-        const zoomEase = zoomEasing.value;
-        const zoomPat = zoomPattern.value;
-        const nodeAnimPattern = {
-          pos: nodeAnimPatternPos.value,
-          zoom: nodeAnimPatternZoom.value,
-          rot: nodeAnimPatternRot.value
-        };
-        const nodeAnimParams = {
-          pos: {
-            amp: parseFloat(nodeAnimPosAmp.value) || 0,
-            freq: parseFloat(nodeAnimPosFreq.value) || 1,
-            phase: parseFloat(nodeAnimPosPhase.value) || 0
-          },
-          zoom: {
-            amp: parseFloat(nodeAnimZoomAmp.value) || 0,
-            freq: parseFloat(nodeAnimZoomFreq.value) || 1,
-            phase: parseFloat(nodeAnimZoomPhase.value) || 0
-          },
-          rot: {
-            amp: parseFloat(nodeAnimRotAmp.value) || 0,
-            freq: parseFloat(nodeAnimRotFreq.value) || 1,
-            phase: parseFloat(nodeAnimRotPhase.value) || 0
-          }
-        };
-        const addendum = Math.max(1, Math.min(90, parseFloat(zoomAddendumInput.value) || 10));
-        const minZoom = (100 - addendum) / 100;
-        const maxZoom = (100 + addendum) / 100;
-        if (arrangeMode === 'random') {
-        sprites.forEach((sprite, index) => {
-            let speed = rotationSpeeds[index];
-            if (rotationEnabled) {
-              // Apply pattern
-              let factor = 1;
-              if (pattern === 'sin') {
-                factor = Math.sin(time + index);
-              } else if (pattern === 'pulse') {
-                factor = Math.abs(Math.sin(time * 2 + index));
-              } else if (pattern === 'ramp') {
-                factor = (Math.sin(time + index) + 1) / 2;
-              }
-              // Apply easing
-              let eased = factor;
-              if (easing === 'easeIn') {
-                eased = factor * factor;
-              } else if (easing === 'easeOut') {
-                eased = Math.sqrt(Math.max(0, factor));
-              } else if (easing === 'easeInOut') {
-                eased = factor < 0.5 ? 2 * factor * factor : 1 - Math.pow(-2 * factor + 2, 2) / 2;
-              }
-              // Clamp eased to a safe range
-              if (!isFinite(eased) || isNaN(eased)) eased = 0;
-              eased = Math.max(-10, Math.min(10, eased));
-              sprite.material.rotation += speed * eased * (parseFloat(rotationWeight.value) || 1);
-            } else {
-              // Do not rotate at all if disabled
-              // Optionally, you could set sprite.material.rotation = 0; if you want to reset
-            }
-            // Idle Zoom logic
-            if (zoomEnabled) {
-              let zfactor = 1;
-              if (zoomPat === 'sin') {
-                zfactor = (Math.sin(time * 2 + index) + 1) / 2;
-              } else if (zoomPat === 'pulse') {
-                zfactor = Math.abs(Math.sin(time * 4 + index));
-              } else if (zoomPat === 'ramp') {
-                zfactor = (Math.sin(time + index) + 1) / 2;
-              }
-              let zeased = zfactor;
-              if (zoomEase === 'easeIn') {
-                zeased = zfactor * zfactor;
-              } else if (zoomEase === 'easeOut') {
-                zeased = Math.sqrt(Math.max(0, zfactor));
-              } else if (zoomEase === 'easeInOut') {
-                zeased = zfactor < 0.5 ? 2 * zfactor * zfactor : 1 - Math.pow(-2 * zfactor + 2, 2) / 2;
-              }
-              if (!isFinite(zeased) || isNaN(zeased)) zeased = 0;
-              zeased = Math.max(0, Math.min(1, zeased));
-              // Base scale
-              let base = (arrangeMode === 'grid')
-                ? parseFloat(emojiSizeInput.value) || 1
-                : baseScales[index] || 1;
-              let scale = base * (minZoom + (maxZoom - minZoom) * zeased) * (parseFloat(zoomWeight.value) || 1);
-              scale = Math.max(base * 0.1, Math.min(base * 4, scale));
-              sprite.scale.set(scale, scale, 1);
-            }
-          sprite.position.x += velocities[index].x;
-          sprite.position.y += velocities[index].y;
-          sprite.position.z += velocities[index].z;
-          // Bounce off the box
-          if (sprite.position.x < -5 || sprite.position.x > 5) velocities[index].x *= -1;
-          if (sprite.position.y < -5 || sprite.position.y > 5) velocities[index].y *= -1;
-          if (sprite.position.z < -5 || sprite.position.z > 5) velocities[index].z *= -1;
-        });
-        } else {
-          sprites.forEach((sprite, index) => {
-            let speed = rotationSpeeds[index];
-            // Node animation pattern for grid (separate for pos/zoom/rot)
-            let dx = 0, dy = 0, dscale = 1, drot = 0;
-            if (sprite.userData.grid) {
-              const {row, col, x, y} = sprite.userData.grid;
-              // Position
-              if (nodeAnimPattern.pos !== 'none') {
-                let t = time * nodeAnimParams.pos.freq + nodeAnimParams.pos.phase;
-                if (nodeAnimPattern.pos === 'sine') {
-                  dx = Math.sin(t + row) * nodeAnimParams.pos.amp;
-                  dy = Math.sin(t + col) * nodeAnimParams.pos.amp;
-                } else if (nodeAnimPattern.pos === 'diagonal') {
-                  dx = Math.sin(t + row + col) * nodeAnimParams.pos.amp;
-                  dy = Math.sin(t + row - col) * nodeAnimParams.pos.amp;
-                } else if (nodeAnimPattern.pos === 'circular') {
-                  const angle = t + (row + col) * 0.2;
-                  dx = Math.cos(angle) * nodeAnimParams.pos.amp;
-                  dy = Math.sin(angle) * nodeAnimParams.pos.amp;
-                }
-              }
-              // Zoom
-              if (nodeAnimPattern.zoom !== 'none') {
-                let t = time * nodeAnimParams.zoom.freq + nodeAnimParams.zoom.phase;
-                if (nodeAnimPattern.zoom === 'sine') {
-                  dscale = 1 + nodeAnimParams.zoom.amp * Math.sin(t + row + col);
-                } else if (nodeAnimPattern.zoom === 'diagonal') {
-                  dscale = 1 + nodeAnimParams.zoom.amp * Math.sin(t + row * col * 0.1);
-                } else if (nodeAnimPattern.zoom === 'circular') {
-                  const angle = t + (row + col) * 0.2;
-                  dscale = 1 + nodeAnimParams.zoom.amp * Math.sin(angle);
-                }
-              }
-              // Rotation
-              if (nodeAnimPattern.rot !== 'none') {
-                let t = time * nodeAnimParams.rot.freq + nodeAnimParams.rot.phase;
-                if (nodeAnimPattern.rot === 'sine') {
-                  drot = nodeAnimParams.rot.amp * Math.sin(t + row - col);
-                } else if (nodeAnimPattern.rot === 'diagonal') {
-                  drot = nodeAnimParams.rot.amp * Math.sin(t + row * 0.5 + col * 0.5);
-                } else if (nodeAnimPattern.rot === 'circular') {
-                  const angle = t + (row + col) * 0.2;
-                  drot = nodeAnimParams.rot.amp * Math.cos(angle);
-                }
-              }
-              // Apply to position
-              sprite.position.x = x + dx;
-              sprite.position.y = y + dy;
-            }
-            if (rotationEnabled) {
-              let factor = 1;
-              if (pattern === 'sin') {
-                factor = Math.sin(time + index);
-              } else if (pattern === 'pulse') {
-                factor = Math.abs(Math.sin(time * 2 + index));
-              } else if (pattern === 'ramp') {
-                factor = (Math.sin(time + index) + 1) / 2;
-              }
-              let eased = factor;
-              if (easing === 'easeIn') {
-                eased = factor * factor;
-              } else if (easing === 'easeOut') {
-                eased = Math.sqrt(Math.max(0, factor));
-              } else if (easing === 'easeInOut') {
-                eased = factor < 0.5 ? 2 * factor * factor : 1 - Math.pow(-2 * factor + 2, 2) / 2;
-              }
-              if (!isFinite(eased) || isNaN(eased)) eased = 0;
-              eased = Math.max(-10, Math.min(10, eased));
-              sprite.material.rotation += speed * eased + drot;
-            } else {
-              // Do not rotate at all if disabled
-              // Optionally, you could set sprite.material.rotation = 0; if you want to reset
-            }
-            // Idle Zoom logic
-            if (zoomEnabled) {
-              let zfactor = 1;
-              if (zoomPat === 'sin') {
-                zfactor = (Math.sin(time * 2 + index) + 1) / 2;
-              } else if (zoomPat === 'pulse') {
-                zfactor = Math.abs(Math.sin(time * 4 + index));
-              } else if (zoomPat === 'ramp') {
-                zfactor = (Math.sin(time + index) + 1) / 2;
-              }
-              let zeased = zfactor;
-              if (zoomEase === 'easeIn') {
-                zeased = zfactor * zfactor;
-              } else if (zoomEase === 'easeOut') {
-                zeased = Math.sqrt(Math.max(0, zfactor));
-              } else if (zoomEase === 'easeInOut') {
-                zeased = zfactor < 0.5 ? 2 * zfactor * zfactor : 1 - Math.pow(-2 * zfactor + 2, 2) / 2;
-              }
-              if (!isFinite(zeased) || isNaN(zeased)) zeased = 0;
-              zeased = Math.max(0, Math.min(1, zeased));
-              let base = (arrangeMode === 'grid')
-                ? parseFloat(emojiSizeInput.value) || 1
-                : baseScales[index] || 1;
-              let scale = base * (minZoom + (maxZoom - minZoom) * zeased) * dscale;
-              scale = Math.max(base * 0.1, Math.min(base * 4, scale));
-              sprite.scale.set(scale, scale, 1);
-            }
-          });
-        }
-        // Postprocessing: use composer if bloom enabled, else normal render
-        if (isRecording && capturer) {
-          composer.render(renderer);
-          capturer.capture(renderer.domElement);
-          frameCount++;
-          const maxFrames = parseInt(document.getElementById('recordFramesInput').value) || 1;
-          if (frameCount >= maxFrames) {
-            stopRecording();
-          }
-        } else {
-          composer.render(renderer);
-        }
-        // Realtime per-emoji PNG resolution switching
-        sprites.forEach((sprite, index) => {
-          const scale = sprite.scale.x; // assume uniform scale
-          const pos = sprite.position;
-          // Use the filename from filteredFiles if available
-          let fallbackFilename = null;
-          if (typeof getFilenamesForCurrentGroup === 'function') {
-            const files = getFilenamesForCurrentGroup();
-            fallbackFilename = files[index % files.length];
-          }
-          const emojiFilename = sprite.userData && sprite.userData.filename ? sprite.userData.filename : fallbackFilename;
-          if (!emojiFilename) return;
-          const resFolder = selectResolutionFolder(scale, pos);
-          if (!spriteResFolders[index]) spriteResFolders[index] = null;
-          if (spriteResFolders[index] !== resFolder) {
-            sprite.material.map = getCachedTexture(emojiFilename, resFolder);
-            sprite.material.needsUpdate = true;
-            spriteResFolders[index] = resFolder;
-          }
-        });
-      }
-
-      animate();
-
-      resetRotationBtn.addEventListener('click', () => {
-        sprites.forEach(sprite => {
-          sprite.material.rotation = 0;
-        });
-      });
-
-      resetZoomBtn.addEventListener('click', () => {
-        sprites.forEach((sprite, index) => {
-          // Reset to base scale (grid or random)
-          if (arrangeMode === 'grid') {
-            const emojiScale = parseFloat(emojiSizeInput.value) || 1;
-            sprite.scale.set(emojiScale, emojiScale, 1);
-          } else {
-            const scale = baseScales[index] || 1;
-            sprite.scale.set(scale, scale, 1);
-          }
-        });
-      });
-
-      // Enable Bootstrap tooltips for Node Animation Patterns
-      document.querySelectorAll('#nodeAnimPatternPos, #nodeAnimPatternZoom, #nodeAnimPatternRot, #nodeAnimPosAmp, #nodeAnimPosFreq, #nodeAnimPosPhase, #nodeAnimZoomAmp, #nodeAnimZoomFreq, #nodeAnimZoomPhase, #nodeAnimRotAmp, #nodeAnimRotFreq, #nodeAnimRotPhase').forEach(el => {
-        el.setAttribute('data-bs-toggle', 'tooltip');
-      });
-      document.getElementById('nodeAnimPatternPos').setAttribute('title', 'Pattern for position animation');
-      document.getElementById('nodeAnimPatternZoom').setAttribute('title', 'Pattern for zoom animation');
-      document.getElementById('nodeAnimPatternRot').setAttribute('title', 'Pattern for rotation animation');
-      document.getElementById('nodeAnimPosAmp').setAttribute('title', 'Amplitude for position animation');
-      document.getElementById('nodeAnimPosFreq').setAttribute('title', 'Frequency for position animation');
-      document.getElementById('nodeAnimPosPhase').setAttribute('title', 'Phase for position animation');
-      document.getElementById('nodeAnimZoomAmp').setAttribute('title', 'Amplitude for zoom animation');
-      document.getElementById('nodeAnimZoomFreq').setAttribute('title', 'Frequency for zoom animation');
-      document.getElementById('nodeAnimZoomPhase').setAttribute('title', 'Phase for zoom animation');
-      document.getElementById('nodeAnimRotAmp').setAttribute('title', 'Amplitude for rotation animation');
-      document.getElementById('nodeAnimRotFreq').setAttribute('title', 'Frequency for rotation animation');
-      document.getElementById('nodeAnimRotPhase').setAttribute('title', 'Phase for rotation animation');
-      var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-      tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
-      });
-
-      // Recording time/frames sync logic
-      const recordDurationInput = document.getElementById('recordDurationInput');
-      const recordFramesInput = document.getElementById('recordFramesInput');
-      function parseDuration(str) {
-        const m = str.match(/^(\d{1,2}):(\d{2})$/);
-        if (!m) return 0;
-        return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
-      }
-      function formatDuration(secs) {
-        const m = Math.floor(secs / 60);
-        const s = secs % 60;
-        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-      }
-      function syncRecordTimeFields(changed) {
-        const fps = parseInt(document.getElementById('fpsInput').value) || 60;
-        if (changed === 'duration') {
-          const secs = parseDuration(recordDurationInput.value);
-          const frames = Math.round(secs * fps);
-          recordFramesInput.value = frames;
-        } else if (changed === 'frames') {
-          const frames = parseInt(recordFramesInput.value) || 1;
-          const secs = Math.round(frames / fps);
-          recordDurationInput.value = formatDuration(secs);
-        } else if (changed === 'fps') {
-          // Recalculate frames from duration
-          const secs = parseDuration(recordDurationInput.value);
-          recordFramesInput.value = Math.round(secs * fps);
-        }
-      }
-      recordDurationInput.addEventListener('change', () => syncRecordTimeFields('duration'));
-      recordFramesInput.addEventListener('change', () => syncRecordTimeFields('frames'));
-      // Initialize
-      syncRecordTimeFields('duration');
-
-      // Add a cache for last used resolution folder per sprite
-      let spriteResFolders = [];
-
-      // Add global variable for alignment object mesh
-      let alignmentObjectMesh = null;
-
-      // Always define pattern before using it
-      const pattern = gridPatternSelect.value;
-      // In arrangeSprites, after arranging emojis, update or create the alignment object mesh for 3D patterns
-      if (['swirl','torus','spiral','sphere'].includes(pattern)) {
-        if (alignmentObjectMesh) scene.remove(alignmentObjectMesh);
-        if (pattern === 'torus') {
-          const geometry = new THREE.TorusGeometry(4, 1.2, 32, 100);
-          const mat = new THREE.MeshBasicMaterial({ color: 0x00ffcc, wireframe: true });
-          alignmentObjectMesh = new THREE.Mesh(geometry, mat);
-        } else if (pattern === 'sphere') {
-          const geometry = new THREE.SphereGeometry(5, 32, 32);
-          const mat = new THREE.MeshBasicMaterial({ color: 0x00ffcc, wireframe: true });
-          alignmentObjectMesh = new THREE.Mesh(geometry, mat);
-        } else if (pattern === 'swirl' || pattern === 'spiral') {
-          // Use a tube along a helix/spiral path
-          const curve = new THREE.CurvePath();
-          const turns = pattern === 'swirl' ? 2 : 3;
-          const points = [];
-          for (let i = 0; i < 100; i++) {
-            const t = i / 99;
-            const angle = t * turns * Math.PI * 2;
-            const radius = pattern === 'swirl' ? 4 : (1 + 4 * t);
-            const height = 6 * (t - 0.5);
-            const x = Math.cos(angle) * radius;
-            const y = height;
-            const z = Math.sin(angle) * radius;
-            points.push(new THREE.Vector3(x, y, z));
-          }
-          const curve3 = new THREE.CatmullRomCurve3(points);
-          const geometry = new THREE.TubeGeometry(curve3, 100, 0.15, 8, false);
-          const mat = new THREE.MeshBasicMaterial({ color: 0x00ffcc, wireframe: true });
-          alignmentObjectMesh = new THREE.Mesh(geometry, mat);
-        }
-        if (alignmentObjectMesh) {
-          alignmentObjectMesh.visible = document.getElementById('showAlignmentObjectToggle').checked;
-          scene.add(alignmentObjectMesh);
-        }
-      } else {
-        if (alignmentObjectMesh) {
-          scene.remove(alignmentObjectMesh);
-          alignmentObjectMesh = null;
-        }
-      }
-
-      document.getElementById('showAlignmentObjectToggle').addEventListener('change', () => {
-        if (alignmentObjectMesh) alignmentObjectMesh.visible = document.getElementById('showAlignmentObjectToggle').checked;
-      });
-    }
-
-    // Move getSurfaceNormal definition here, before arrangeSprites
-    function getSurfaceNormal(pattern, x, y, z, t, phi) {
+    
+    /**
+     * Calculates surface normal for 3D patterns.
+     * @param {string} pattern - Pattern name.
+     * @param {number} x, y, z - Point coordinates.
+     * @param {number} t - Parameter for pattern generation.
+     * @returns {THREE.Vector3 | null} Normalized surface normal or null.
+     */
+    function getSurfaceNormal(pattern, x, y, z, t) {
       if (pattern === 'swirl' || pattern === 'spiral') {
-        // Helix/spiral: normal is radial from axis
-        const center = new THREE.Vector3(0, y, 0);
-        const pos = new THREE.Vector3(x, y, z);
-        return pos.clone().sub(center).normalize();
+        const radialVector = new THREE.Vector3(x, 0, z); 
+        if (radialVector.lengthSq() === 0) return new THREE.Vector3(0,1,0); 
+        return radialVector.normalize();
       } else if (pattern === 'torus') {
-        // Torus: normal is from center of tube
-        const R = 4, r = 1.2;
-        const angle = t * Math.PI * 2;
-        const phi = t * Math.PI * 4;
-        const cx = Math.cos(angle) * R;
-        const cz = Math.sin(angle) * R;
-        const tubeCenter = new THREE.Vector3(cx, 0, cz);
-        const pos = new THREE.Vector3(x, y, z);
-        return pos.clone().sub(tubeCenter).normalize();
+        const R = 4; // Major radius of torus, assumed for normal calculation
+        const mainRingAngle = Math.atan2(z, x);
+        const mainRingPointX = R * Math.cos(mainRingAngle);
+        const mainRingPointZ = R * Math.sin(mainRingAngle);
+        const tubeCenter = new THREE.Vector3(mainRingPointX, 0, mainRingPointZ);
+        const surfacePoint = new THREE.Vector3(x, y, z);
+        const normal = surfacePoint.clone().sub(tubeCenter);
+        if (normal.lengthSq() === 0) return new THREE.Vector3(x,y,z).normalize(); // Fallback for center points
+        return normal.normalize();
       } else if (pattern === 'sphere') {
-        // Sphere: normal is from center
-        return new THREE.Vector3(x, y, z).normalize();
+        const normal = new THREE.Vector3(x, y, z);
+        if (normal.lengthSq() === 0) return new THREE.Vector3(0,1,0); // Fallback for origin
+        return normal.normalize();
       }
-      return null;
+      return null; // For patterns where normal is not applicable or defined (e.g., 2D grids)
     }
 
-    main();
+    /**
+     * Synchronizes recording duration, frames, and FPS input fields.
+     * @param {'duration' | 'frames' | 'fps'} changedField - Field that triggered sync.
+     */
+    function syncRecordTimeFields(changedField) {
+        const fps = parseInt(ui.fpsInput.value) || 60; 
+        if (changedField === 'duration') {
+            const secs = parseDuration(ui.recordDurationInput.value);
+            ui.recordFramesInput.value = Math.round(secs * fps);
+        } else if (changedField === 'frames') {
+            const frames = parseInt(ui.recordFramesInput.value) || 1;
+            ui.recordDurationInput.value = formatDuration(Math.round(frames / fps));
+        } else if (changedField === 'fps') { // Also syncs if FPS changes
+            const secs = parseDuration(ui.recordDurationInput.value);
+            ui.recordFramesInput.value = Math.round(secs * fps);
+        }
+    }
+    
+    /**
+     * Gets group keys from emoji set data.
+     * @param {object|Array} setData - Emoji set data.
+     * @returns {string[]} Array of group keys.
+     */
+    function getGroupKeysFromSet(setData) {
+      if (Array.isArray(setData)) return ['default']; 
+      if (typeof setData === 'object' && setData !== null) return Object.keys(setData);
+      return [];
+    }
+
+    /**
+     * Gets emoji list for a specific group from set data.
+     * @param {object|Array} setData - Emoji set data.
+     * @param {string} groupKey - Desired group key.
+     * @returns {string[]} Array of emoji characters/strings.
+     */
+    function getEmojiListFromSet(setData, groupKey) {
+      if (Array.isArray(setData)) return setData; 
+      if (typeof setData === 'object' && setData !== null) {
+        let val = setData[groupKey];
+        if (Array.isArray(val)) return val; 
+        if (typeof val === 'string') return val.split(';').map(e => e.trim()).filter(Boolean); 
+        return [];
+      }
+      return [];
+    }    
+
+    // --- Core Application Setup ---
+    
+    /** Initializes Three.js scene, camera, and display renderer. */
+    function setupSceneAndDisplayRenderer() {
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera.position.z = 5; 
+
+      displayRenderer = createRendererInstance({
+        width: window.innerWidth,
+        height: window.innerHeight,
+        preserveDrawingBuffer: false, 
+        pixelRatio: window.devicePixelRatio 
+      });
+      document.body.appendChild(displayRenderer.domElement);
+    }
+
+    /** Caches DOM element references in the `ui` object. */
+    function cacheDOMElements() {
+      const ids = [
+        'fpsInput', 'recordDurationInput', 'recordFramesInput', 'widthInput', 'heightInput',
+        'startRecordingBtn', 'stopRecordingBtn', 'recordingStatus', 'presetSelect',
+        'applyPresetBtn', 'savePresetNameInput', 'savePresetBtn', 'emojiCountInput',
+        'gridSpacingInput', 'gridScaleInput', 'gridScaleNumber', 'gridPatternSelect',
+        'emojiSetFileSelect', 'emojiGroupSelect', 'emojiSizeInput', 'rotationToggle',
+        'rotationWeight', 'rotationEasing', 'rotationPattern', 'resetRotationBtn',
+        'zoomToggle', 'zoomWeight', 'zoomEasing', 'zoomPattern', 'resetZoomBtn', 'zoomAddendumInput',
+        'nodeAnimPatternPos', 'nodeAnimPosAmp', 'nodeAnimPosFreq', 'nodeAnimPosPhase',
+        'nodeAnimPatternZoom', 'nodeAnimZoomAmp', 'nodeAnimZoomFreq', 'nodeAnimZoomPhase',
+        'nodeAnimPatternRot', 'nodeAnimRotAmp', 'nodeAnimRotFreq', 'nodeAnimRotPhase',
+        'showAlignmentObjectToggle', 'diagnosticOverlay', 'diagnosticMessage'
+      ];
+      ids.forEach(id => ui[id] = document.getElementById(id));
+    }
+
+    /**
+     * Sets up or reconfigures the post-processing pipeline.
+     * @param {THREE.WebGLRenderer} targetRenderer - Renderer to attach composer to.
+     * @param {number} width - Composer width.
+     * @param {number} height - Composer height.
+     */
+    function setupPostprocessing(targetRenderer, width, height) {
+      if (composer) composer.passes.forEach(pass => { if (pass.dispose) pass.dispose(); });
+
+      composer = new EffectComposer(targetRenderer); 
+      composer.setSize(width, height); 
+
+      renderPass = new RenderPass(scene, camera);
+      composer.addPass(renderPass);
+
+      // Helper to get control value or default
+      const getCtrl = (id, parseFn = parseFloat, def) => {
+        const el = document.getElementById(id);
+        return el ? parseFn(el.value) : def;
+      };
+      const getChecked = (id, def) => document.getElementById(id) ? document.getElementById(id).checked : def;
+
+      bloomPass = new UnrealBloomPass(new THREE.Vector2(width, height), 
+        getCtrl('bloomStrength', parseFloat, 1.5), 
+        getCtrl('bloomRadius', parseFloat, 0.4), 
+        getCtrl('bloomThreshold', parseFloat, 0.85)
+      );
+      afterimagePass = new AfterimagePass(getCtrl('afterimageDamp', parseFloat, 0.96)); 
+      halftonePass = new HalftonePass(width, height, { 
+        radius: getCtrl('halftoneRadius', parseInt, 4), shape: 1, 
+      });
+      dotScreenPass = new ShaderPass(DotScreenShader);
+      dotScreenPass.uniforms['scale'].value = getCtrl('dotscreenScale', parseFloat, 1); 
+      dotScreenPass.uniforms['angle'].value = getCtrl('dotscreenAngle', parseFloat, 1.57); 
+      dotScreenPass.uniforms['center'].value.set(getCtrl('dotscreenCenterX', parseFloat, 0.5), getCtrl('dotscreenCenterY', parseFloat, 0.5));
+      rgbShiftPass = new ShaderPass(RGBShiftShader);
+      rgbShiftPass.uniforms['amount'].value = getCtrl('rgbshiftAmount', parseFloat, 0.0015); 
+      sepiaPass = new ShaderPass(SepiaShader);
+      sepiaPass.uniforms['amount'].value = getCtrl('sepiaAmount', parseFloat, 0.9); 
+      vignettePass = new ShaderPass(VignetteShader);
+      vignettePass.uniforms['offset'].value = getCtrl('vignetteOffset', parseFloat, 1.6); 
+      vignettePass.uniforms['darkness'].value = getCtrl('vignetteDarkness', parseFloat, 0.95); 
+      filmPass = new FilmPass(
+        getCtrl('filmNoiseIntensity', parseFloat, 0.35),
+        getCtrl('filmScanlinesIntensity', parseFloat, 0.35),
+        getCtrl('filmScanlinesCount', parseInt, 4096),
+        getChecked('filmGrayscale', false)
+      );
+      outputPass = new OutputPass();
+
+      if (getChecked('bloomToggle', true)) composer.addPass(bloomPass);
+      if (getChecked('afterimageToggle', false)) composer.addPass(afterimagePass);
+      if (getChecked('halftoneToggle', false)) composer.addPass(halftonePass);
+      if (getChecked('dotscreenToggle', false)) composer.addPass(dotScreenPass);
+      if (getChecked('rgbshiftToggle', false)) composer.addPass(rgbShiftPass);
+      if (getChecked('sepiaToggle', false)) composer.addPass(sepiaPass);
+      if (getChecked('vignetteToggle', false)) composer.addPass(vignettePass);
+      if (getChecked('filmToggle', false)) composer.addPass(filmPass);
+      composer.addPass(outputPass); 
+    }
+    
+    /**
+     * Selects best resolution folder based on projected emoji pixel width.
+     * @param {number} emojiScale - Current scale of the emoji.
+     * @param {THREE.Vector3} emojiPosition - Current position of the emoji.
+     * @returns {string} Resolution folder name ('32', '72', '128', '512').
+     */
+    function selectResolutionFolder(emojiScale, emojiPosition = new THREE.Vector3(0,0,0)) {
+      const currentTargetRenderer = isRecording ? recordingRenderer : displayRenderer;
+      if (!currentTargetRenderer || !camera) return '128'; // Safety check
+
+      const width = currentTargetRenderer.domElement.width;
+      const p1 = emojiPosition.clone().project(camera);
+      const p2 = emojiPosition.clone().add(new THREE.Vector3(emojiScale, 0, 0)).project(camera); // Project point offset by scale
+      
+      // Convert NDC to screen space pixels
+      const sx1 = (p1.x * 0.5 + 0.5) * width;
+      const sx2 = (p2.x * 0.5 + 0.5) * width;
+      const pixelWidth = Math.abs(sx2 - sx1);
+
+      if (pixelWidth <= 40) return '32';
+      if (pixelWidth <= 100) return '72';
+      if (pixelWidth <= 200) return '128';
+      return '512';
+    }
+
+    // --- Recording Functionality ---
+
+    /** Handles starting the recording process. */
+    function startRecording() {
+      if (!recordingRenderer) {
+        recordingRenderer = createRendererInstance({
+          width: RECORD_WIDTH, height: RECORD_HEIGHT,
+          preserveDrawingBuffer: true, pixelRatio: 1 // Use pixelRatio 1 for recording for consistency
+        });
+      } else {
+        recordingRenderer.setSize(RECORD_WIDTH, RECORD_HEIGHT);
+      }
+      // Store original aspect and set recording aspect
+      camera.userData.originalAspect = camera.aspect; 
+      camera.aspect = RECORD_WIDTH / RECORD_HEIGHT;
+      camera.updateProjectionMatrix();
+      // Setup postprocessing for the recording renderer
+      setupPostprocessing(recordingRenderer, RECORD_WIDTH, RECORD_HEIGHT);
+
+      // Hide UI elements that shouldn't be in the recording
+      ui.recordingOffcanvas.style.display = 'none';
+      if (ui.diagnosticOverlay) ui.diagnosticOverlay.style.display = 'none';
+      
+      capturer = new CCapture({
+        format: 'webm', framerate: RECORD_FPS, quality: 100,
+        verbose: false, name: 'emoji-sprites', display: true // display true shows progress
+      });
+      capturer.start();
+      isRecording = true;
+      frameCount = 0; 
+
+      ui.recordingStatus.textContent = `Recording... (${RECORD_WIDTH}x${RECORD_HEIGHT} @ ${RECORD_FPS}fps)`;
+      ui.recordingStatus.classList.remove('text-danger');
+      ui.recordingStatus.classList.add('text-success');
+      ui.startRecordingBtn.disabled = true;
+      ui.stopRecordingBtn.disabled = false;
+      // Disable inputs that affect recording dimensions/fps
+      [ui.fpsInput, ui.widthInput, ui.heightInput, ui.recordDurationInput, ui.recordFramesInput].forEach(el => el.disabled = true);
+      console.log('Recording started.');
+    }
+
+    /** Handles stopping the recording process. */
+    function stopRecording() {
+      if (!isRecording && !capturer) return; // Nothing to stop
+      isRecording = false;
+      
+      if (capturer) {
+        capturer.stop();
+        capturer.save(); // Triggers download
+      }
+      capturer = null; 
+
+      ui.recordingOffcanvas.style.display = ''; // Show UI again
+      
+      // Restore original camera aspect
+      if (camera.userData.originalAspect) {
+        camera.aspect = camera.userData.originalAspect;
+      } else { // Fallback if originalAspect wasn't set
+        camera.aspect = window.innerWidth / window.innerHeight;
+      }
+      camera.updateProjectionMatrix();
+      // Re-setup postprocessing for the display renderer
+      setupPostprocessing(displayRenderer, window.innerWidth, window.innerHeight);
+
+      // Dispose of recording renderer if it exists to free resources
+      if (recordingRenderer) {
+        recordingRenderer.dispose();
+        recordingRenderer = null;
+      }
+      
+      ui.recordingStatus.textContent = 'Recording stopped and saved.';
+      ui.recordingStatus.classList.remove('text-success');
+      ui.recordingStatus.classList.add('text-danger');
+      ui.startRecordingBtn.disabled = false;
+      ui.stopRecordingBtn.disabled = true;
+      [ui.fpsInput, ui.widthInput, ui.heightInput, ui.recordDurationInput, ui.recordFramesInput].forEach(el => el.disabled = false);
+      console.log('Recording stopped. Renderer, camera, and composer restored for display.');
+    }
+
+    // --- Preset Functionality ---
+
+    /** Populates the preset dropdown with initial and saved presets. */
+    function populatePresetDropdown() {
+      ui.presetSelect.innerHTML = '<option value="" selected>Select Preset...</option>'; // Clear existing
+      for (const name in initialPresets) {
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = name;
+        ui.presetSelect.appendChild(option);
+      }
+      for (const name in savedPresets) { // Add saved presets after initial ones
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = name + " (Saved)";
+        ui.presetSelect.appendChild(option);
+      }
+    }
+
+    /**
+     * Applies a selected preset's settings to UI controls and updates the scene.
+     * @param {string} name - The name of the preset to apply.
+     */
+    async function applyPreset(name) { 
+      const preset = initialPresets[name] || savedPresets[name];
+      if (!preset) {
+        console.warn(`Preset "${name}" not found.`);
+        return;
+      }
+      console.log("Applying preset:", name, preset);
+
+      for (const controlId in preset) {
+        const el = document.getElementById(controlId); // Direct ID access is fine here
+        if (el) {
+          const value = preset[controlId];
+          if (el.type === 'checkbox') {
+            el.checked = value;
+          } else if (el.type === 'radio') {
+            const radioToSelect = document.querySelector(`input[name="${el.name}"][value="${value}"]`);
+            if (radioToSelect) radioToSelect.checked = true;
+            if (el.name === "arrangeMode") arrangeMode = value; // Update global arrangeMode
+          } else if (el.tagName === 'SELECT') {
+            if (controlId === 'emojiSetFileSelect') { // Special handling for emoji set
+              el.value = value;
+              await populateGroupDropdown(value); // Repopulate and set group (if specified in preset)
+              // If emojiGroupSelect is also in preset, it will be set in a subsequent iteration
+            } else {
+              el.value = value;
+            }
+          } else { // Includes text, number, range inputs
+            el.value = value;
+            // Sync number input if range input has a twin (e.g. gridScaleInput -> gridScaleNumber)
+            if (el.type === 'range' && ui[controlId + 'Number']) {
+              ui[controlId + 'Number'].value = value;
+            }
+          }
+          // Dispatch events to ensure other parts of the app react to changes
+          el.dispatchEvent(new Event('input', { bubbles: true })); 
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+          // Visual feedback for changed control
+          el.classList.add('control-changed');
+          setTimeout(() => el.classList.remove('control-changed'), 700);
+        } else if (controlId === "arrangeMode") { // Handle arrangeMode if not directly tied to an element in the loop
+            arrangeMode = preset[controlId]; 
+        } else {
+          console.warn(`Element with ID ${controlId} not found for preset application.`);
+        }
+      }
+      await updateEmojis(); // Update emoji display based on new settings
+      setupPostprocessing(displayRenderer, window.innerWidth, window.innerHeight); // Update postprocessing for display
+      console.log("Preset application finished for:", name);
+    }
+
+    /** Saves the current UI settings as a new preset. */
+    function saveCurrentSettingsAsPreset(name) {
+      if (!name.trim()) {
+        alert("Please enter a name for the preset.");
+        return;
+      }
+      const currentSettings = { // Gather all relevant settings from UI controls
+        emojiCountInput: parseInt(ui.emojiCountInput.value),
+        gridSpacingInput: parseFloat(ui.gridSpacingInput.value),
+        gridScaleInput: parseFloat(ui.gridScaleInput.value),
+        gridScaleNumber: parseFloat(ui.gridScaleNumber.value), // Ensure this is saved too
+        gridPatternSelect: ui.gridPatternSelect.value,
+        arrangeMode: document.querySelector('input[name="arrangeMode"]:checked').value,
+        emojiSetFileSelect: ui.emojiSetFileSelect.value, 
+        emojiGroupSelect: ui.emojiGroupSelect.value,   
+        emojiSizeInput: parseFloat(ui.emojiSizeInput.value),
+        rotationToggle: ui.rotationToggle.checked,
+        rotationWeight: parseFloat(ui.rotationWeight.value),
+        rotationEasing: ui.rotationEasing.value,
+        rotationPattern: ui.rotationPattern.value,
+        zoomToggle: ui.zoomToggle.checked,
+        zoomWeight: parseFloat(ui.zoomWeight.value),
+        zoomEasing: ui.zoomEasing.value,
+        zoomPattern: ui.zoomPattern.value,
+        zoomAddendumInput: parseFloat(ui.zoomAddendumInput.value),
+        nodeAnimPatternPos: ui.nodeAnimPatternPos.value,
+        nodeAnimPosAmp: parseFloat(ui.nodeAnimPosAmp.value),
+        nodeAnimPosFreq: parseFloat(ui.nodeAnimPosFreq.value),
+        nodeAnimPosPhase: parseFloat(ui.nodeAnimPosPhase.value),
+        nodeAnimPatternZoom: ui.nodeAnimPatternZoom.value,
+        nodeAnimZoomAmp: parseFloat(ui.nodeAnimZoomAmp.value),
+        nodeAnimZoomFreq: parseFloat(ui.nodeAnimZoomFreq.value),
+        nodeAnimZoomPhase: parseFloat(ui.nodeAnimZoomPhase.value),
+        nodeAnimPatternRot: ui.nodeAnimPatternRot.value,
+        nodeAnimRotAmp: parseFloat(ui.nodeAnimRotAmp.value),
+        nodeAnimRotFreq: parseFloat(ui.nodeAnimRotFreq.value),
+        nodeAnimRotPhase: parseFloat(ui.nodeAnimRotPhase.value),
+        // Post-processing settings
+        bloomToggle: document.getElementById('bloomToggle').checked,
+        bloomStrength: parseFloat(document.getElementById('bloomStrength').value),
+        bloomRadius: parseFloat(document.getElementById('bloomRadius').value),
+        bloomThreshold: parseFloat(document.getElementById('bloomThreshold').value),
+        afterimageToggle: document.getElementById('afterimageToggle').checked,
+        afterimageDamp: parseFloat(document.getElementById('afterimageDamp').value),
+        halftoneToggle: document.getElementById('halftoneToggle').checked,
+        halftoneRadius: parseInt(document.getElementById('halftoneRadius').value),
+        dotscreenToggle: document.getElementById('dotscreenToggle').checked,
+        dotscreenScale: parseFloat(document.getElementById('dotscreenScale').value),
+        dotscreenAngle: parseFloat(document.getElementById('dotscreenAngle').value),
+        dotscreenCenterX: parseFloat(document.getElementById('dotscreenCenterX').value),
+        dotscreenCenterY: parseFloat(document.getElementById('dotscreenCenterY').value),
+        rgbshiftToggle: document.getElementById('rgbshiftToggle').checked,
+        rgbshiftAmount: parseFloat(document.getElementById('rgbshiftAmount').value),
+        sepiaToggle: document.getElementById('sepiaToggle').checked,
+        sepiaAmount: parseFloat(document.getElementById('sepiaAmount').value),
+        vignetteToggle: document.getElementById('vignetteToggle').checked,
+        vignetteOffset: parseFloat(document.getElementById('vignetteOffset').value),
+        vignetteDarkness: parseFloat(document.getElementById('vignetteDarkness').value),
+        filmToggle: document.getElementById('filmToggle').checked,
+        filmNoiseIntensity: parseFloat(document.getElementById('filmNoiseIntensity').value),
+        filmScanlinesIntensity: parseFloat(document.getElementById('filmScanlinesIntensity').value),
+        filmScanlinesCount: parseInt(document.getElementById('filmScanlinesCount').value),
+        filmGrayscale: document.getElementById('filmGrayscale').checked,
+      };
+      savedPresets[name] = currentSettings; // Store in-session
+      // TODO: Consider localStorage for persistence: localStorage.setItem('emojiPresets', JSON.stringify(savedPresets));
+      populatePresetDropdown(); // Update dropdown to include the new preset
+      ui.savePresetNameInput.value = ''; // Clear the input field
+      ui.presetSelect.value = name; // Select the newly saved preset
+      console.log("Saved preset:", name, currentSettings);
+    }
+    
+    // --- Emoji & Sprite Logic ---
+
+    /** Loads the list of available emoji set files from 'assets/sets.json'. */
+    async function loadEmojiSetList() {
+      const response = await fetch('assets/sets.json');
+      if (!response.ok) throw new Error('Failed to load assets/sets.json');
+      return await response.json();
+    }
+
+    /** Loads a specific emoji set file (JSON). */
+    async function loadEmojiSetFile(filename) {
+      const response = await fetch(`assets/sets/${filename}`);
+      if (!response.ok) throw new Error(`Failed to load assets/sets/${filename}`);
+      return await response.json();
+    }
+    
+    /**
+     * Populates the emoji group dropdown based on the selected set file.
+     * @param {string} setFile - The filename of the selected emoji set.
+     */
+    async function populateGroupDropdown(setFile) {
+      return new Promise(async (resolve, reject) => {
+        try {
+          if (!emojiSetCache[setFile]) { // Load and cache if not already in memory
+            console.log(`Loading set file: ${setFile}`);
+            emojiSetCache[setFile] = await loadEmojiSetFile(setFile);
+          }
+          currentSetData = emojiSetCache[setFile];
+          currentSetFile = setFile;
+          const groupKeys = getGroupKeysFromSet(currentSetData);
+          ui.emojiGroupSelect.innerHTML = ''; // Clear existing options
+          groupKeys.forEach(key => {
+            const opt = document.createElement('option');
+            opt.value = key;
+            opt.textContent = key.charAt(0).toUpperCase() + key.slice(1); // Capitalize
+            ui.emojiGroupSelect.appendChild(opt);
+          });
+
+          // If a preset is being applied and it specifies an emojiGroupSelect, let applyPreset handle it.
+          // Otherwise, set to the first group or whatever is stored in the preset.
+          const presetName = ui.presetSelect.value;
+          const activePreset = initialPresets[presetName] || savedPresets[presetName];
+          if (activePreset && activePreset.emojiGroupSelect) {
+            ui.emojiGroupSelect.value = activePreset.emojiGroupSelect;
+          } else if (groupKeys.length > 0) {
+            ui.emojiGroupSelect.value = groupKeys[0]; // Default to the first group
+          }
+          currentGroupKey = ui.emojiGroupSelect.value; 
+          console.log(`Populated groups for ${setFile}. Current group: ${currentGroupKey}`);
+          resolve();
+        } catch (error) {
+          console.error("Error populating group dropdown:", error);
+          reject(error);
+        }
+      });
+    }
+
+    /** Generates emoji filenames for the current group based on codepoints. */
+    function getFilenamesForCurrentGroup() {
+      const emojiList = getEmojiListFromSet(currentSetData, currentGroupKey);
+      if (!emojiList) return [];
+      return emojiList.map(e => {
+        if (!e) return undefined; // Skip empty entries
+        const codepoints = Array.from(e).map(c => c.codePointAt(0).toString(16)).join('_');
+        return `emoji_u${codepoints}.png`;
+      }).filter(Boolean); // Remove any undefined entries
+    }
+
+    /** Clears existing sprites and creates new ones based on current UI settings. */
+    async function updateEmojis() {
+      sprites.forEach(sprite => scene.remove(sprite)); // Clear old sprites from scene
+      sprites = []; // Reset arrays
+      rotationSpeeds = [];
+      velocities = [];
+      baseScales = [];
+      spriteResFolders = [];
+
+      N = parseInt(ui.emojiCountInput.value) || 10;
+      
+      let initialEmojiScale; // Scale used for texture selection and initial mesh creation
+      if (arrangeMode === 'grid') {
+        const scaleFactor = parseFloat(ui.gridScaleInput.value) || 1;
+        initialEmojiScale = (parseFloat(ui.emojiSizeInput.value) || 1) * scaleFactor;
+      } else { // Random mode
+        initialEmojiScale = parseFloat(ui.emojiSizeInput.value) || 1; 
+      }
+      
+      // Determine optimal resolution folder once for all new sprites
+      const resFolder = selectResolutionFolder(initialEmojiScale, new THREE.Vector3(0,0,0)); 
+      const allFiles = getFilenamesForCurrentGroup();
+      const filteredFiles = await filterExistingEmojiFilenames(allFiles, resFolder);
+      
+      if (filteredFiles.length === 0) {
+        console.warn("No valid emoji files found for the current group/resolution.");
+        if (ui.diagnosticOverlay) ui.diagnosticOverlay.style.display = 'flex';
+        if (ui.diagnosticMessage) ui.diagnosticMessage.textContent = 'No emojis loadable for current set/group!';
+        // Call arrangeSprites to ensure scene is clean if it was previously populated
+        arrangeSprites(); 
+        return;
+      }
+      if (ui.diagnosticOverlay) ui.diagnosticOverlay.style.display = 'none'; // Hide diagnostic if files found
+
+      for (let i = 0; i < N; i++) {
+        const filename = filteredFiles[i % filteredFiles.length]; // Cycle through available files
+        const texture = getCachedTexture(filename, resFolder);
+        const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true, alphaTest: 0.01 });
+        // PlaneGeometry uses the initialEmojiScale, which might be adjusted later by arrangeSprites or animations
+        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(initialEmojiScale, initialEmojiScale), material);
+        mesh.userData.filename = filename; // Store for potential resolution switching
+        scene.add(mesh);
+        sprites.push(mesh);
+        rotationSpeeds.push((Math.random() - 0.5) * 0.1); // Random speed and direction
+        velocities.push({x: 0, y: 0, z: 0}); // Initialized for random mode
+        baseScales.push(initialEmojiScale); // Store the scale set here
+        spriteResFolders.push(resFolder); // Store initial resolution folder
+      }
+      arrangeSprites(); // Position and scale the newly created sprites
+    }
+    
+    // --- Sprite Arrangement Pattern Helpers ---
+    function arrangeGridPatternNormalOrStripes(sprite, r, c, viewWidth, viewHeight, cellSize, displayEmojiScale, patternType, margin) {
+        let x = -viewWidth / 2 + margin + c * cellSize + displayEmojiScale / 2;
+        let y = viewHeight / 2 - margin - r * cellSize - displayEmojiScale / 2;
+        if (patternType === 'hstripes') y += ((r % 2) * cellSize * 0.3); // Offset for horizontal stripes
+        if (patternType === 'vstripes') x += ((c % 2) * cellSize * 0.3); // Offset for vertical stripes
+        sprite.position.set(x, y, 0);
+        sprite.userData.grid = {row: r, col: c, x_base: x, y_base: y, z_base: 0};
+        sprite.lookAt(camera.position);
+    }
+
+    function arrangeGridPatternSwirl(sprite, i, totalSprites, gridScaleVal) {
+        const turns = 2;
+        const t = i / Math.max(1, totalSprites - 1); // t from 0 to 1
+        const angle = t * turns * Math.PI * 2;
+        const radius = 4 * gridScaleVal; 
+        const height = 6 * (t - 0.5) * gridScaleVal; // y position based on t
+        sprite.position.set(Math.cos(angle) * radius, height, Math.sin(angle) * radius);
+        const normal = getSurfaceNormal('swirl', sprite.position.x, sprite.position.y, sprite.position.z, t);
+        if(normal) sprite.lookAt(sprite.position.clone().add(normal)); else sprite.lookAt(camera.position);
+        sprite.userData.grid = { x_base: sprite.position.x, y_base: sprite.position.y, z_base: sprite.position.z };
+    }
+
+    function arrangeGridPatternTorus(sprite, i, totalSprites, gridScaleVal) {
+        const R = 4 * gridScaleVal, rMinor = 1.2 * gridScaleVal; // Major and minor radii
+        const t = i / Math.max(1, totalSprites); // t from 0 to almost 1
+        const mainAngle = t * Math.PI * 2;         // Angle around the main ring
+        const tubeAngle = t * Math.PI * 6;         // Angle around the tube (more twists)
+        sprite.position.set(
+            (R + rMinor * Math.cos(tubeAngle)) * Math.cos(mainAngle),
+            rMinor * Math.sin(tubeAngle),
+            (R + rMinor * Math.cos(tubeAngle)) * Math.sin(mainAngle)
+        );
+        const normal = getSurfaceNormal('torus', sprite.position.x, sprite.position.y, sprite.position.z, t);
+        if(normal) sprite.lookAt(sprite.position.clone().add(normal)); else sprite.lookAt(camera.position);
+        sprite.userData.grid = { x_base: sprite.position.x, y_base: sprite.position.y, z_base: sprite.position.z };
+    }
+    
+    function arrangeGridPatternSpiral(sprite, i, totalSprites, gridScaleVal) {
+        const turns = 3;
+        const t = i / Math.max(1, totalSprites - 1);
+        const angle = t * turns * Math.PI * 2;
+        const radius = (1 + 4 * t) * gridScaleVal; // Radius increases with t
+        const height = 6 * (t - 0.5) * gridScaleVal;
+        sprite.position.set(Math.cos(angle) * radius, height, Math.sin(angle) * radius);
+        const normal = getSurfaceNormal('spiral', sprite.position.x, sprite.position.y, sprite.position.z, t);
+        if(normal) sprite.lookAt(sprite.position.clone().add(normal)); else sprite.lookAt(camera.position);
+        sprite.userData.grid = { x_base: sprite.position.x, y_base: sprite.position.y, z_base: sprite.position.z };
+    }
+
+    function arrangeGridPatternSphere(sprite, i, totalSprites, gridScaleVal) {
+        const radius = 5 * gridScaleVal;
+        // Using Fibonacci lattice for even distribution (Golden Spiral method)
+        const offset = 2 / Math.max(1, totalSprites);
+        const increment = Math.PI * (3 - Math.sqrt(5)); // Golden angle in radians
+        const y = ((i * offset) - 1) + (offset / 2);    // y goes from -1 to 1
+        const r = Math.sqrt(1 - y*y);                   // radius at y
+        const phi = i * increment;                      // angle
+        sprite.position.set(Math.cos(phi)*r*radius, y*radius, Math.sin(phi)*r*radius);
+        const normal = getSurfaceNormal('sphere', sprite.position.x, sprite.position.y, sprite.position.z, i/totalSprites);
+        if(normal) sprite.lookAt(sprite.position.clone().add(normal)); else sprite.lookAt(camera.position);
+        sprite.userData.grid = { x_base: sprite.position.x, y_base: sprite.position.y, z_base: sprite.position.z };
+    }
+
+    /** Arranges sprites based on current mode and pattern, updates scales and textures. */
+    async function arrangeSprites() {
+      let arrangeModeCurrent = document.querySelector('input[name="arrangeMode"]:checked').value;
+      let currentEmojiCount = parseInt(ui.emojiCountInput.value) || 10;
+      let emojiScaleVal = parseFloat(ui.emojiSizeInput.value) || 1; // Base size from UI
+      let gridScaleVal = parseFloat(ui.gridScaleInput.value) || 1;   // Grid scale modifier
+      let gridSpacingVal = parseFloat(ui.gridSpacingInput.value) || 0.2;
+      let pattern = ui.gridPatternSelect.value;
+      
+      if (currentEmojiCount !== N) N = currentEmojiCount; // Update global N if changed
+
+      // Determine the scale to apply to sprites for display
+      const displayEmojiScale = arrangeModeCurrent === 'grid' ? emojiScaleVal * gridScaleVal : emojiScaleVal;
+
+      if (sprites.length !== N) { // If sprite count changed, rebuild them
+          await updateEmojis(); // This will re-populate sprites and call arrangeSprites again
+          return; 
+      }
+      
+      // Update texture resolution and scale for existing sprites
+      sprites.forEach((sprite, index) => {
+          const resFolder = selectResolutionFolder(displayEmojiScale, sprite.position); // Use current display scale and position
+          const filename = sprite.userData.filename || getFilenamesForCurrentGroup()[index % getFilenamesForCurrentGroup().length];
+          
+          if (filename && spriteResFolders[index] !== resFolder) { // Update texture only if resolution folder changes
+            const newTexture = getCachedTexture(filename, resFolder);
+            if (sprite.material.map !== newTexture) {
+                sprite.material.map = newTexture;
+                sprite.material.needsUpdate = true;
+            }
+            spriteResFolders[index] = resFolder; // Cache the new folder
+          }
+          sprite.scale.set(displayEmojiScale, displayEmojiScale, 1); // Apply calculated display scale
+          baseScales[index] = displayEmojiScale; // Update base scale for animations
+      });
+
+      if (arrangeModeCurrent === 'grid') {
+        const margin = gridSpacingVal * gridScaleVal;
+        // Use current renderer aspect for grid calculation, fallback to recording if not available
+        const aspect = (isRecording && recordingRenderer) ? (RECORD_WIDTH / RECORD_HEIGHT) : (window.innerWidth / window.innerHeight);
+        const viewHeight = 10; // Base viewport height for calculations
+        const viewWidth = viewHeight * aspect;
+        const cellSize = displayEmojiScale + margin; // Size of each grid cell including margin
+
+        if (['normal', 'hstripes', 'vstripes'].includes(pattern)) {
+            const cols = Math.max(1, Math.floor((viewWidth + margin) / cellSize));
+            const rows = Math.max(1, Math.floor((viewHeight + margin) / cellSize));
+            const gridN = Math.min(N, cols * rows); // Number of sprites that fit the grid
+            let spriteIndex = 0;
+            for (let r = 0; r < rows && spriteIndex < gridN; r++) {
+                for (let c = 0; c < cols && spriteIndex < gridN; c++) {
+                    if (!sprites[spriteIndex]) continue;
+                    arrangeGridPatternNormalOrStripes(sprites[spriteIndex], r, c, viewWidth, viewHeight, cellSize, displayEmojiScale, pattern, margin);
+                    spriteIndex++;
+                }
+            }
+            for (let i = gridN; i < N; i++) if(sprites[i]) sprites[i].visible = false; // Hide unused
+            for (let i = 0; i < gridN; i++) if(sprites[i]) sprites[i].visible = true;
+        } else { // 3D patterns
+            sprites.forEach(s => s.visible = true); // All sprites visible for 3D patterns
+            for (let i = 0; i < N; i++) {
+                if (!sprites[i]) continue;
+                if      (pattern === 'swirl')  arrangeGridPatternSwirl(sprites[i], i, N, gridScaleVal);
+                else if (pattern === 'torus')  arrangeGridPatternTorus(sprites[i], i, N, gridScaleVal);
+                else if (pattern === 'spiral') arrangeGridPatternSpiral(sprites[i], i, N, gridScaleVal);
+                else if (pattern === 'sphere') arrangeGridPatternSphere(sprites[i], i, N, gridScaleVal);
+            }
+        }
+      } else { // Random mode
+        sprites.forEach((sprite, index) => {
+          sprite.visible = true;
+          if (!sprite.userData.initialRandomPosition) { // Set initial random pos only once
+             sprite.position.set((Math.random()-0.5)*10, (Math.random()-0.5)*10, (Math.random()-0.5)*10);
+             sprite.userData.initialRandomPosition = sprite.position.clone();
+          } else {
+             sprite.position.copy(sprite.userData.initialRandomPosition); // Reset to initial for consistency on mode switch
+          }
+          // Velocities are applied in animation loop
+          velocities[index] = { x: (Math.random()-0.5)*0.02, y: (Math.random()-0.5)*0.02, z: (Math.random()-0.5)*0.02 };
+          sprite.lookAt(camera.position);
+          // baseScales already set by updateEmojis or this function's loop above
+          const scale = baseScales[index] || displayEmojiScale;
+          sprite.scale.set(scale, scale, 1);
+        });
+      }
+      updateAlignmentVisualizer(arrangeModeCurrent, pattern, gridScaleVal);
+    }
+
+    /** Creates or updates the 3D alignment visualization object. */
+    function updateAlignmentVisualizer(currentArrangeMode, pattern, gridScaleVal) {
+        const showAlignment = ui.showAlignmentObjectToggle.checked;
+        if (alignmentObjectMesh) scene.remove(alignmentObjectMesh); // Remove old one
+        alignmentObjectMesh = null;
+
+        if (currentArrangeMode === 'grid' && ['swirl', 'torus', 'spiral', 'sphere'].includes(pattern)) {
+            let geometry;
+            const material = new THREE.MeshBasicMaterial({ color: 0x00ffcc, wireframe: true, transparent: true, opacity: 0.3 });
+            
+            if (pattern === 'torus') {
+              geometry = new THREE.TorusGeometry(4 * gridScaleVal, 1.2 * gridScaleVal, 16, 50);
+            } else if (pattern === 'sphere') {
+              geometry = new THREE.SphereGeometry(5 * gridScaleVal, 32, 16);
+            } else if (pattern === 'swirl' || pattern === 'spiral') {
+                const turns = pattern === 'swirl' ? 2 : 3;
+                const points = [];
+                for (let i = 0; i < 100; i++) { // 100 points for the curve
+                    const t = i / 99; // 0 to 1
+                    const angle = t * turns * Math.PI * 2;
+                    const radius = (pattern === 'swirl' ? 4 : (1 + 4 * t)) * gridScaleVal;
+                    const height = 6 * (t - 0.5) * gridScaleVal;
+                    points.push(new THREE.Vector3(Math.cos(angle) * radius, height, Math.sin(angle) * radius));
+                }
+                const curve = new THREE.CatmullRomCurve3(points);
+                geometry = new THREE.TubeGeometry(curve, 64, 0.1 * gridScaleVal, 8, false);
+            }
+
+            if (geometry) {
+                alignmentObjectMesh = new THREE.Mesh(geometry, material);
+                alignmentObjectMesh.visible = showAlignment;
+                scene.add(alignmentObjectMesh);
+            }
+        }
+        if(alignmentObjectMesh) alignmentObjectMesh.visible = showAlignment; // Ensure visibility matches toggle
+    }
+
+
+    // --- Animation Loop ---
+
+    /** Applies animations (node, idle) to a single sprite. */
+    function applySpriteAnimations(sprite, index, time, currentArrangeMode) {
+        let { x_base, y_base, z_base } = sprite.userData.grid || sprite.position; // Get base position
+
+        if (currentArrangeMode === 'random') {
+            sprite.position.x += velocities[index].x;
+            sprite.position.y += velocities[index].y;
+            sprite.position.z += velocities[index].z;
+            // Simple boundary reflection
+            if (sprite.position.x < -5 || sprite.position.x > 5) velocities[index].x *= -1;
+            if (sprite.position.y < -5 || sprite.position.y > 5) velocities[index].y *= -1;
+            if (sprite.position.z < -5 || sprite.position.z > 5) velocities[index].z *= -1;
+        } else if (currentArrangeMode === 'grid') {
+            let dx=0, dy=0, dz=0, dscale_factor=1, drot_val=0;
+            const nodeAnimActive = id => ui[id] && ui[id].value !== 'none';
+            const getVal = id => parseFloat(ui[id]?.value) || 0;
+            const getPattern = id => ui[id]?.value;
+
+            // Node Position Animation
+            if(nodeAnimActive('nodeAnimPatternPos')) {
+                const amp = getVal('nodeAnimPosAmp'), freq = getVal('nodeAnimPosFreq'), phase = getVal('nodeAnimPosPhase');
+                const t = time * freq + phase + (sprite.userData.grid?.row || 0) * 0.5 + (sprite.userData.grid?.col || 0) * 0.3;
+                switch(getPattern('nodeAnimPatternPos')) {
+                    case 'sine': dx = Math.sin(t) * amp; dy = Math.cos(t*0.8) * amp; break;
+                    case 'diagonal': dx = Math.sin(t) * amp; dy = dx; break;
+                    case 'circular': dx = Math.cos(t) * amp; dy = Math.sin(t) * amp; break;
+                }
+                sprite.position.set(x_base + dx, y_base + dy, z_base + dz);
+            }
+            // Node Zoom Animation
+            if(nodeAnimActive('nodeAnimPatternZoom')){
+                const amp = getVal('nodeAnimZoomAmp'), freq = getVal('nodeAnimZoomFreq'), phase = getVal('nodeAnimZoomPhase');
+                const t = time * freq + phase + (sprite.userData.grid?.row || 0) * 0.4 + (sprite.userData.grid?.col || 0) * 0.2;
+                switch(getPattern('nodeAnimPatternZoom')) {
+                    case 'sine': dscale_factor = 1 + Math.sin(t) * amp; break;
+                    case 'diagonal': dscale_factor = 1 + Math.sin(t + (sprite.userData.grid?.row || 0) + (sprite.userData.grid?.col || 0)) * amp; break;
+                    case 'circular': dscale_factor = 1 + Math.sin( ( (sprite.userData.grid?.row || 0) + (sprite.userData.grid?.col || 0) ) * 0.5 + t) * amp; break;
+                }
+            }
+            // Node Rotation Animation
+            if(nodeAnimActive('nodeAnimPatternRot')) {
+                const amp = getVal('nodeAnimRotAmp'), freq = getVal('nodeAnimRotFreq'), phase = getVal('nodeAnimRotPhase');
+                const t = time * freq + phase + (sprite.userData.grid?.row || 0) * 0.3 + (sprite.userData.grid?.col || 0) * 0.5;
+                 switch(getPattern('nodeAnimPatternRot')) {
+                    case 'sine': drot_val = Math.sin(t) * amp; break;
+                    case 'diagonal': drot_val = Math.sin(t + (sprite.userData.grid?.row || 0) - (sprite.userData.grid?.col || 0)) * amp; break;
+                    case 'circular': drot_val = Math.cos( ( (sprite.userData.grid?.row || 0) - (sprite.userData.grid?.col || 0) ) * 0.5 + t) * amp; break;
+                }
+            }
+            const baseScaleVal = baseScales[index] || 1;
+            sprite.scale.set(baseScaleVal * dscale_factor, baseScaleVal * dscale_factor, baseScaleVal * dscale_factor);
+            sprite.material.rotation += drot_val;
+        }
+
+        // Idle Rotation (Global)
+        if (ui.rotationToggle.checked) {
+          let speed = rotationSpeeds[index];
+          let factor = 1;
+          const rotPattern = ui.rotationPattern.value;
+          const rotEasing = ui.rotationEasing.value;
+          if (rotPattern === 'sin') factor = Math.sin(time + index);
+          else if (rotPattern === 'pulse') factor = Math.abs(Math.sin(time * 2 + index));
+          else if (rotPattern === 'ramp') factor = (Math.sin(time + index) + 1) / 2; // 0 to 1
+          
+          let eased = factor; // Apply easing
+          if (rotEasing === 'easeIn') eased = factor * factor;
+          else if (rotEasing === 'easeOut') eased = Math.sqrt(Math.max(0, factor)); // Ensure factor is non-negative for sqrt
+          else if (rotEasing === 'easeInOut') eased = factor < 0.5 ? 2 * factor * factor : 1 - Math.pow(-2 * factor + 2, 2) / 2;
+          
+          if (!isFinite(eased) || isNaN(eased)) eased = 0; // Sanity check
+          eased = Math.max(-10, Math.min(10, eased)); // Clamp eased value
+          sprite.material.rotation += speed * eased * (parseFloat(ui.rotationWeight.value) || 1);
+        }
+
+        // Idle Zoom (Global) - Only applied in random mode to avoid conflict with grid node zoom
+        if (ui.zoomToggle.checked && currentArrangeMode === 'random') {
+          let zfactor = 1;
+          const zoomPat = ui.zoomPattern.value;
+          const zoomEase = ui.zoomEasing.value;
+          const addendum = Math.max(1, Math.min(90, parseFloat(ui.zoomAddendumInput.value) || 10));
+          const minZoomFactor = (100 - addendum) / 100;
+          const maxZoomFactor = (100 + addendum) / 100;
+
+          if (zoomPat === 'sin') zfactor = (Math.sin(time * 2 + index) + 1) / 2; // 0 to 1
+          else if (zoomPat === 'pulse') zfactor = Math.abs(Math.sin(time * 4 + index)); // 0 to 1
+          else if (zoomPat === 'ramp') zfactor = (Math.sin(time + index) + 1) / 2; // 0 to 1
+          
+          let zeased = zfactor; // Apply easing
+          if (zoomEase === 'easeIn') zeased = zfactor * zfactor;
+          else if (zoomEase === 'easeOut') zeased = Math.sqrt(Math.max(0, zfactor));
+          else if (zoomEase === 'easeInOut') zeased = zfactor < 0.5 ? 2 * zfactor * zfactor : 1 - Math.pow(-2 * zfactor + 2, 2) / 2;
+          
+          if (!isFinite(zeased) || isNaN(zeased)) zeased = 0; // Sanity check
+          zeased = Math.max(0, Math.min(1, zeased)); // Clamp eased value (0 to 1)
+          
+          let currentBaseScale = baseScales[index] || 1;
+          let newScale = currentBaseScale * (minZoomFactor + (maxZoomFactor - minZoomFactor) * zeased) * (parseFloat(ui.zoomWeight.value) || 1);
+          newScale = Math.max(currentBaseScale * 0.1, Math.min(currentBaseScale * 4, newScale)); // Clamp scale
+          sprite.scale.set(newScale, newScale, 1); // Apply scale (z is 1 for planes)
+        }
+    }
+
+    /** Dynamically updates sprite texture resolution based on its current scale and position. */
+    function updateSpriteTextureResolution(sprite, index) {
+        const currentScale = sprite.scale.x; // Assuming uniform scaling
+        const pos = sprite.position;
+        const emojiFilename = sprite.userData.filename || getFilenamesForCurrentGroup()[index % getFilenamesForCurrentGroup().length];
+        
+        if (!emojiFilename) return; // No filename, cannot update texture
+        
+        const newResFolder = selectResolutionFolder(currentScale, pos); 
+        
+        if (spriteResFolders[index] !== newResFolder) { // Only update if folder changed
+          const newTexture = getCachedTexture(emojiFilename, newResFolder);
+          if (newTexture !== sprite.material.map) { 
+               sprite.material.map = newTexture;
+               sprite.material.needsUpdate = true;
+          }
+          spriteResFolders[index] = newResFolder; // Update cached folder
+        }
+    }
+    
+    /** Main animation loop. */
+    function animate() {
+      requestAnimationFrame(animate);
+      const time = isRecording ? frameCount / RECORD_FPS : performance.now() * 0.001;
+      const currentArrangeMode = document.querySelector('input[name="arrangeMode"]:checked').value;
+
+      sprites.forEach((sprite, index) => {
+        if (!sprite.visible) return;
+        applySpriteAnimations(sprite, index, time, currentArrangeMode);
+        updateSpriteTextureResolution(sprite, index);
+      });
+
+      composer.render(); 
+
+      if (isRecording && capturer && recordingRenderer) {
+        capturer.capture(recordingRenderer.domElement); 
+        frameCount++;
+        const maxFrames = parseInt(ui.recordFramesInput.value) || 1;
+        if (frameCount >= maxFrames) stopRecording();
+      }
+    }
+
+    // --- UI Controls and Event Binding ---
+    
+    /** Populates emoji set and group dropdowns from assets. */
+    async function populateEmojiControls() {
+      try {
+        emojiSetFiles = await loadEmojiSetList(); 
+        ui.emojiSetFileSelect.innerHTML = ''; // Clear previous options
+        emojiSetFiles.forEach(filename => {
+          const opt = document.createElement('option');
+          opt.value = filename;
+          // Format filename for display (e.g., "noto_emoji_regular.json" -> "Noto Emoji Regular")
+          opt.textContent = filename.replace(/\.json$/, '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+          ui.emojiSetFileSelect.appendChild(opt);
+        });
+        if (emojiSetFiles.length > 0) {
+          ui.emojiSetFileSelect.value = emojiSetFiles[0]; // Default to first set
+          await populateGroupDropdown(ui.emojiSetFileSelect.value); 
+        }
+      } catch (error) {
+        console.error("Failed to populate emoji controls:", error);
+        // Optionally display an error to the user in the UI
+      }
+    }
+
+    /** Sets initial values for UI controls like recording dimensions. */
+    function initializeUIValues() {
+      ui.widthInput.value = RECORD_WIDTH;
+      ui.heightInput.value = RECORD_HEIGHT;
+      ui.fpsInput.value = RECORD_FPS;
+      syncRecordTimeFields('duration'); // Calculate initial frames based on default duration and FPS
+      ui.stopRecordingBtn.disabled = true; // Stop button disabled initially
+    }
+    
+    // --- Event Listener Binding Sub-functions ---
+    function bindRecordingEventListeners() {
+        ui.startRecordingBtn.addEventListener('click', startRecording);
+        ui.stopRecordingBtn.addEventListener('click', stopRecording);
+        ui.fpsInput.addEventListener('change', (e) => {
+            if (!isRecording) { RECORD_FPS = parseInt(e.target.value) || 60; syncRecordTimeFields('fps'); }
+        });
+        ui.widthInput.addEventListener('change', (e) => { 
+            if (!isRecording) RECORD_WIDTH = parseInt(e.target.value) || window.innerWidth; 
+        });
+        ui.heightInput.addEventListener('change', (e) => { 
+            if (!isRecording) RECORD_HEIGHT = parseInt(e.target.value) || window.innerHeight; 
+        });
+        ui.recordDurationInput.addEventListener('change', () => syncRecordTimeFields('duration'));
+        ui.recordFramesInput.addEventListener('change', () => syncRecordTimeFields('frames'));
+    }
+
+    function bindPresetEventListeners() {
+        ui.applyPresetBtn.addEventListener('click', async () => {
+            if (ui.presetSelect.value) await applyPreset(ui.presetSelect.value);
+        });
+        ui.savePresetBtn.addEventListener('click', () => saveCurrentSettingsAsPreset(ui.savePresetNameInput.value));
+    }
+
+    function bindArrangementEventListeners() {
+        document.querySelectorAll('input[name="arrangeMode"]').forEach(el => {
+            el.addEventListener('change', (e) => { 
+                arrangeMode = e.target.value; 
+                updateEmojis(); 
+            });
+        });
+        const controlsForArrange = [ui.gridSpacingInput, ui.gridPatternSelect, ui.gridScaleInput, ui.gridScaleNumber];
+        controlsForArrange.forEach(el => {
+            if(el) el.addEventListener(el.type === 'range' || el.id.includes('Scale') ? 'input' : 'change', () => arrangeSprites());
+        });
+        ui.gridScaleInput.addEventListener('input', () => { ui.gridScaleNumber.value = ui.gridScaleInput.value; arrangeSprites(); });
+        ui.gridScaleNumber.addEventListener('change', () => { ui.gridScaleInput.value = ui.gridScaleNumber.value; arrangeSprites(); }); // Use change for number input
+    }
+
+    function bindAppearanceEventListeners() {
+        ui.emojiCountInput.addEventListener('change', () => { 
+            N = parseInt(ui.emojiCountInput.value) || 10; 
+            // updateEmojis will be called, which then calls arrangeSprites
+            updateEmojis(); 
+        });
+        ui.emojiSetFileSelect.addEventListener('change', async () => {
+            await populateGroupDropdown(ui.emojiSetFileSelect.value);
+            await updateEmojis(); 
+        });
+        ui.emojiGroupSelect.addEventListener('change', () => {
+            currentGroupKey = ui.emojiGroupSelect.value; 
+            updateEmojis(); 
+        });
+        ui.emojiSizeInput.addEventListener('change', () => arrangeSprites());
+    }
+    
+    function bindRotationEventListeners() {
+        [ui.rotationToggle, ui.rotationWeight, ui.rotationEasing, ui.rotationPattern, ui.zoomToggle, ui.zoomWeight, ui.zoomEasing, ui.zoomPattern, ui.zoomAddendumInput].forEach(el => {
+            if(el) el.addEventListener(el.type === 'checkbox' ? 'change' : 'input', () => { /* Handled in animate loop */ });
+        });
+        ui.resetRotationBtn.addEventListener('click', () => { sprites.forEach(s => s.material.rotation = 0); });
+        ui.resetZoomBtn.addEventListener('click', () => {
+            sprites.forEach((sprite, index) => {
+                const base = baseScales[index] || parseFloat(ui.emojiSizeInput.value) || 1; // Use stored baseScale or fallback
+                sprite.scale.set(base, base, 1);
+            });
+        });
+    }
+
+    function bindNodeAnimationEventListeners() {
+        const nodeAnimControls = [
+            ui.nodeAnimPatternPos, ui.nodeAnimPosAmp, ui.nodeAnimPosFreq, ui.nodeAnimPosPhase,
+            ui.nodeAnimPatternZoom, ui.nodeAnimZoomAmp, ui.nodeAnimZoomFreq, ui.nodeAnimZoomPhase,
+            ui.nodeAnimPatternRot, ui.nodeAnimRotAmp, ui.nodeAnimRotFreq, ui.nodeAnimRotPhase
+        ];
+        nodeAnimControls.forEach(el => {
+            if(el) el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', () => { /* Node anims handled in animate() */ });
+        });
+    }
+
+    function bindPostprocessingEventListeners() {
+        const postProcessingControlIds = [
+            'bloomToggle','afterimageToggle','halftoneToggle','dotscreenToggle','rgbshiftToggle','sepiaToggle','vignetteToggle','filmToggle',
+            'bloomThreshold','bloomStrength','bloomRadius','afterimageDamp','halftoneRadius',
+            'dotscreenScale','dotscreenAngle','dotscreenCenterX','dotscreenCenterY', 'rgbshiftAmount', 'sepiaAmount',
+            'vignetteOffset', 'vignetteDarkness', 'filmNoiseIntensity', 'filmScanlinesIntensity', 'filmScanlinesCount', 'filmGrayscale'
+        ];
+        postProcessingControlIds.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                const eventType = (el.type === 'checkbox' || el.tagName === 'SELECT') ? 'change' : 'input';
+                el.addEventListener(eventType, () => { 
+                    setupPostprocessing(displayRenderer, window.innerWidth, window.innerHeight);
+                });
+            }
+        });
+    }
+
+    function bindMiscellaneousEventListeners() {
+        ui.showAlignmentObjectToggle.addEventListener('change', () => {
+            if (alignmentObjectMesh) alignmentObjectMesh.visible = ui.showAlignmentObjectToggle.checked;
+            // If it's a 3D grid pattern, might need to call arrangeSprites to create it if not present
+            const currentArrangeMode = document.querySelector('input[name="arrangeMode"]:checked').value;
+            if (currentArrangeMode === 'grid' && ['swirl','torus','spiral','sphere'].includes(ui.gridPatternSelect.value)) {
+                 updateAlignmentVisualizer(currentArrangeMode, ui.gridPatternSelect.value, parseFloat(ui.gridScaleInput.value));
+            }
+        });
+
+        // Generic 'change' or 'input' listener for visual feedback on controls
+        const allRegisteredControls = Object.values(ui).filter(el => el instanceof HTMLElement);
+        document.querySelectorAll('input[name="arrangeMode"]').forEach(el => allRegisteredControls.push(el));
+        // Add post-processing controls by ID as they might not all be in `ui` directly
+        const postProcessingControlIds = ['bloomToggle','afterimageToggle','halftoneToggle','dotscreenToggle','rgbshiftToggle','sepiaToggle','vignetteToggle','filmToggle', 'bloomThreshold','bloomStrength','bloomRadius','afterimageDamp','halftoneRadius', 'dotscreenScale','dotscreenAngle','dotscreenCenterX','dotscreenCenterY', 'rgbshiftAmount', 'sepiaAmount', 'vignetteOffset', 'vignetteDarkness', 'filmNoiseIntensity', 'filmScanlinesIntensity', 'filmScanlinesCount', 'filmGrayscale'];
+        postProcessingControlIds.forEach(id => { const el = document.getElementById(id); if (el) allRegisteredControls.push(el); });
+        
+        allRegisteredControls.forEach(el => {
+          if (el && !el.classList.contains('no-feedback')) { // Opt-out with 'no-feedback'
+            const eventType = (el.type === 'range' || (el.type === 'number' && el.classList.contains('form-control-sm'))) ? 'input' : 'change';
+            el.addEventListener(eventType, (event) => {
+              event.target.classList.add('control-changed');
+              setTimeout(() => event.target.classList.remove('control-changed'), 700);
+            });
+          }
+        });
+    }
+    
+    function bindWindowEventListeners() {
+        window.addEventListener('resize', () => {
+            if (camera && displayRenderer && composer) { 
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                displayRenderer.setSize(window.innerWidth, window.innerHeight);
+                setupPostprocessing(displayRenderer, window.innerWidth, window.innerHeight);
+            }
+        });
+    }
+    
+    /** Central function to bind all event listeners by category. */
+    function bindEventListeners() {
+      bindRecordingEventListeners();
+      bindPresetEventListeners();
+      bindArrangementEventListeners();
+      bindAppearanceEventListeners();
+      bindRotationEventListeners();
+      bindNodeAnimationEventListeners();
+      bindPostprocessingEventListeners();
+      bindMiscellaneousEventListeners();
+      bindWindowEventListeners();
+      
+      // Tooltip initialization
+      var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+      tooltipTriggerList.map(function (tooltipTriggerEl) { return new bootstrap.Tooltip(tooltipTriggerEl); });
+    }
+    
+    /** Main function to initialize and start the application. */
+    async function main() {
+      cacheDOMElements();
+      setupSceneAndDisplayRenderer();
+      setupPostprocessing(displayRenderer, window.innerWidth, window.innerHeight);
+      
+      await populateEmojiControls();
+      initializeUIValues();
+      populatePresetDropdown(); 
+      // TODO: Load saved presets from localStorage:
+      // const stored = localStorage.getItem('emojiPresets');
+      // if (stored) savedPresets = JSON.parse(stored);
+      
+      bindEventListeners();
+      
+      N = parseInt(ui.emojiCountInput.value) || 10;
+      arrangeMode = document.querySelector('input[name="arrangeMode"]:checked').value;
+
+      await updateEmojis(); 
+      animate();
+    }
+
+    // Start the application
+    main().catch(error => {
+        console.error("Error during main execution:", error);
+        if (ui.diagnosticOverlay) ui.diagnosticOverlay.style.display = 'flex';
+        if (ui.diagnosticMessage) ui.diagnosticMessage.textContent = 'Critical Error. Check console.';
+    });
+
   </script>
 </body>
-</html> 
+</html>
