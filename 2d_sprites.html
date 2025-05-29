@@ -1,0 +1,1672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Three.js Multiple Emoji Sprites Floating</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    canvas { display: block; }
+    /* Compact controls tweaks */
+    .offcanvas-body .form-label { font-size: 0.9em; margin-bottom: 0.1em; }
+    .offcanvas-body .form-control,
+    .offcanvas-body .form-select { font-size: 0.9em; padding: 0.2em 0.5em; }
+    .offcanvas-body .accordion-body { padding: 0.3em 0.7em 0.3em 0.7em; }
+    .offcanvas-body .accordion-header { font-size: 1em; }
+    .offcanvas-body .accordion-button { padding: 0.2em 0.7em; font-size: 1em; min-height: 1.8em; }
+    .offcanvas-body .row.g-1 { margin-bottom: 0.15em; }
+    .offcanvas-body .mb-2, .offcanvas-body .mb-3 { margin-bottom: 0.25em !important; }
+    .offcanvas-body .input-group-text { padding: 0.2em 0.5em; font-size: 0.9em; }
+    .offcanvas-body .btn-sm { padding: 0.2em 0.6em; font-size: 0.95em; }
+    .offcanvas-body .form-range { height: 1.2em; }
+    .offcanvas-body .form-check-input { width: 1em; height: 1em; }
+    .offcanvas-body .form-check-label { font-size: 0.9em; }
+    .offcanvas-body .input-group { gap: 0.2em; }
+    .offcanvas-body .col-auto { padding-right: 0.15em; padding-left: 0.15em; }
+    .offcanvas-body .row.align-items-center { align-items: center; }
+    .offcanvas-body .row.g-1 > .col-auto { display: flex; align-items: center; }
+  </style>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.176.0/build/three.module.js",
+        "three/examples/jsm/postprocessing/EffectComposer.js": "https://unpkg.com/three@0.176.0/examples/jsm/postprocessing/EffectComposer.js",
+        "three/examples/jsm/postprocessing/RenderPass.js": "https://unpkg.com/three@0.176.0/examples/jsm/postprocessing/RenderPass.js",
+        "three/examples/jsm/postprocessing/UnrealBloomPass.js": "https://unpkg.com/three@0.176.0/examples/jsm/postprocessing/UnrealBloomPass.js",
+        "three/examples/jsm/postprocessing/AfterimagePass.js": "https://unpkg.com/three@0.176.0/examples/jsm/postprocessing/AfterimagePass.js",
+        "three/examples/jsm/postprocessing/OutputPass.js": "https://unpkg.com/three@0.176.0/examples/jsm/postprocessing/OutputPass.js",
+        "three/examples/jsm/postprocessing/HalftonePass.js": "https://unpkg.com/three@0.176.0/examples/jsm/postprocessing/HalftonePass.js",
+        "three/examples/jsm/postprocessing/ShaderPass.js": "https://unpkg.com/three@0.176.0/examples/jsm/postprocessing/ShaderPass.js",
+        "three/examples/jsm/shaders/DotScreenShader.js": "https://unpkg.com/three@0.176.0/examples/jsm/shaders/DotScreenShader.js",
+        "three/examples/jsm/shaders/RGBShiftShader.js": "https://unpkg.com/three@0.176.0/examples/jsm/shaders/RGBShiftShader.js",
+        "three/examples/jsm/shaders/SepiaShader.js": "https://unpkg.com/three@0.176.0/examples/jsm/shaders/SepiaShader.js",
+        "three/examples/jsm/shaders/VignetteShader.js": "https://unpkg.com/three@0.176.0/examples/jsm/shaders/VignetteShader.js",
+        "three/examples/jsm/postprocessing/FilmPass.js": "https://unpkg.com/three@0.176.0/examples/jsm/postprocessing/FilmPass.js"
+      }
+    }
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/ccapture.js@1.1.0/build/CCapture.all.min.js"></script>
+</head>
+<body>
+  <!-- Offcanvas trigger button -->
+  <button class="btn btn-primary position-absolute m-3" type="button" data-bs-toggle="offcanvas" data-bs-target="#recordingOffcanvas" aria-controls="recordingOffcanvas" style="z-index: 10;">
+    🎥 Recording Controls
+  </button>
+
+  <!-- Offcanvas UI -->
+  <div class="offcanvas offcanvas-end" tabindex="-1" id="recordingOffcanvas" aria-labelledby="recordingOffcanvasLabel" data-bs-backdrop="false">
+    <div class="offcanvas-header">
+      <h5 class="offcanvas-title" id="recordingOffcanvasLabel">Recording Controls</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body">
+      <div class="accordion" id="controlsAccordion">
+        <!-- Recording Controls -->
+        <div class="accordion-item">
+          <h2 class="accordion-header" id="headingRecording">
+            <button class="accordion-button py-2" type="button" data-bs-toggle="collapse" data-bs-target="#collapseRecording" aria-expanded="true" aria-controls="collapseRecording">
+              🎥 Recording
+            </button>
+          </h2>
+          <div id="collapseRecording" class="accordion-collapse collapse show" aria-labelledby="headingRecording" data-bs-parent="#controlsAccordion">
+            <div class="accordion-body py-2">
+              <div class="d-flex gap-2 mb-2">
+                <button id="startRecordingBtn" class="btn btn-success btn-sm flex-fill">Start</button>
+                <button id="stopRecordingBtn" class="btn btn-danger btn-sm flex-fill">Stop</button>
+              </div>
+              <div class="row g-1 mb-2 align-items-center">
+                <div class="col-auto">
+                  <label for="fpsInput" class="form-label mb-0" title="Frames per second">FPS</label>
+                  <input id="fpsInput" type="number" class="form-control form-control-sm" min="1" max="240" value="60" style="width:60px;">
+                </div>
+                <div class="col-auto">
+                  <label for="recordDurationInput" class="form-label mb-0" title="Duration (mm:ss)">Dur</label>
+                  <input id="recordDurationInput" type="text" class="form-control form-control-sm" value="00:10" style="width:70px;">
+                </div>
+                <div class="col-auto">
+                  <label for="recordFramesInput" class="form-label mb-0" title="Total frames">Frm</label>
+                  <input id="recordFramesInput" type="number" class="form-control form-control-sm" min="1" max="100000" value="600" style="width:80px;">
+                </div>
+              </div>
+              <div class="row g-1 mb-2 align-items-center">
+                <div class="col-auto">
+                  <label class="form-label mb-0">Dim</label>
+                </div>
+                <div class="col-auto">
+                  <input id="widthInput" type="number" class="form-control form-control-sm" min="16" max="3840" value="" placeholder="W" style="width:70px;">
+                </div>
+                <div class="col-auto">
+                  <span class="input-group-text p-1">x</span>
+                </div>
+                <div class="col-auto">
+                  <input id="heightInput" type="number" class="form-control form-control-sm" min="16" max="2160" value="" placeholder="H" style="width:70px;">
+                </div>
+              </div>
+              <div class="mt-2">
+                <span id="recordingStatus" class="fw-bold"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Arrangement Controls -->
+        <div class="accordion-item">
+          <h2 class="accordion-header" id="headingArrangement">
+            <button class="accordion-button py-2 collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseArrangement" aria-expanded="false" aria-controls="collapseArrangement">
+              🗺️ Arrangement
+            </button>
+          </h2>
+          <div id="collapseArrangement" class="accordion-collapse collapse" aria-labelledby="headingArrangement" data-bs-parent="#controlsAccordion">
+            <div class="accordion-body py-2">
+              <div class="row g-1 mb-2 align-items-center">
+                <div class="col-auto">
+                  <label for="emojiCountInput" class="form-label mb-0">#</label>
+                  <input id="emojiCountInput" type="number" class="form-control form-control-sm" min="1" max="100" value="10" style="width:60px;">
+                </div>
+                <div class="col-auto">
+                  <label for="gridSpacingInput" class="form-label mb-0">Spacing</label>
+                  <input id="gridSpacingInput" type="number" class="form-control form-control-sm" min="0" max="2" step="0.05" value="0.2" style="width:60px;">
+                </div>
+                <div class="col-auto">
+                  <label for="gridScaleInput" class="form-label mb-0">Scale</label>
+                  <input id="gridScaleInput" type="range" class="form-range form-range-sm" min="0.01" max="2" step="0.01" value="1" style="width:80px;">
+                  <input id="gridScaleNumber" type="number" class="form-control form-control-sm ms-1" min="0.01" max="2" step="0.01" value="1" style="width:60px;">
+                </div>
+                <div class="col-auto">
+                  <label for="gridPatternSelect" class="form-label mb-0">Pattern</label>
+                  <select id="gridPatternSelect" class="form-select form-select-sm">
+                    <option value="normal">Normal</option>
+                    <option value="hstripes">H-Stripes</option>
+                    <option value="vstripes">V-Stripes</option>
+                    <option value="swirl">Swirl (3D)</option>
+                    <option value="torus">Torus (3D)</option>
+                    <option value="spiral">Spiral (3D)</option>
+                    <option value="sphere">Sphere (3D)</option>
+                  </select>
+                </div>
+              </div>
+              <div class="row g-1 mb-2 align-items-center">
+                <div class="col-auto">
+                  <label for="arrangeRandom" class="form-label mb-0">Random</label>
+                  <input class="form-check-input" type="radio" name="arrangeMode" id="arrangeRandom" value="random">
+                </div>
+                <div class="col-auto">
+                  <label for="arrangeGrid" class="form-label mb-0">Grid</label>
+                  <input class="form-check-input" type="radio" name="arrangeMode" id="arrangeGrid" value="grid" checked>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Appearance Controls -->
+        <div class="accordion-item">
+          <h2 class="accordion-header" id="headingAppearance">
+            <button class="accordion-button py-2 collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseAppearance" aria-expanded="false" aria-controls="collapseAppearance">
+              🎨 Appearance
+            </button>
+          </h2>
+          <div id="collapseAppearance" class="accordion-collapse collapse" aria-labelledby="headingAppearance" data-bs-parent="#controlsAccordion">
+            <div class="accordion-body py-2">
+              <div class="row g-1 mb-2 align-items-center">
+                <div class="col-auto">
+                  <label for="emojiSetFileSelect" class="form-label mb-0">Set</label>
+                  <select id="emojiSetFileSelect" class="form-select form-select-sm"></select>
+                </div>
+                <div class="col-auto">
+                  <label for="emojiGroupSelect" class="form-label mb-0">Group</label>
+                  <select id="emojiGroupSelect" class="form-select form-select-sm"></select>
+                </div>
+                <div class="col-auto">
+                  <label for="emojiSizeInput" class="form-label mb-0">Size</label>
+                  <input id="emojiSizeInput" type="number" class="form-control form-control-sm" min="0.1" max="5" step="0.1" value="1" style="width:60px;">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Rotation Controls -->
+        <div class="accordion-item">
+          <h2 class="accordion-header" id="headingRotation">
+            <button class="accordion-button py-2 collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseRotation" aria-expanded="false" aria-controls="collapseRotation">
+              🔄 Rotation
+            </button>
+          </h2>
+          <div id="collapseRotation" class="accordion-collapse collapse" aria-labelledby="headingRotation" data-bs-parent="#controlsAccordion">
+            <div class="accordion-body py-2">
+              <div class="row g-1 mb-2 align-items-center">
+                <div class="col-auto">
+                  <input class="form-check-input" type="checkbox" id="rotationToggle" checked>
+                  <label class="form-check-label mb-0" for="rotationToggle">Idle Rot</label>
+                </div>
+                <div class="col-auto">
+                  <input id="rotationWeight" type="number" class="form-control form-control-sm" value="1" min="0" max="10" step="0.01" style="width:60px;">
+                  <label class="form-label mb-0" for="rotationWeight">Weight</label>
+                </div>
+                <div class="col-auto">
+                  <select id="rotationEasing" class="form-select form-select-sm">
+                    <option value="linear">Linear</option>
+                    <option value="easeIn">Ease In</option>
+                    <option value="easeOut">Ease Out</option>
+                    <option value="easeInOut">Ease In-Out</option>
+                  </select>
+                </div>
+                <div class="col-auto">
+                  <select id="rotationPattern" class="form-select form-select-sm">
+                    <option value="constant">Constant</option>
+                    <option value="sin">Sinusoidal</option>
+                    <option value="pulse">Pulse</option>
+                    <option value="ramp">Ramp</option>
+                  </select>
+                </div>
+                <div class="col-auto">
+                  <button id="resetRotationBtn" class="btn btn-secondary btn-sm">Reset</button>
+                </div>
+              </div>
+              <div class="row g-1 mb-2 align-items-center">
+                <div class="col-auto">
+                  <input class="form-check-input" type="checkbox" id="zoomToggle" checked>
+                  <label class="form-check-label mb-0" for="zoomToggle">Idle Zoom</label>
+                </div>
+                <div class="col-auto">
+                  <input id="zoomWeight" type="number" class="form-control form-control-sm" value="1" min="0" max="10" step="0.01" style="width:60px;">
+                  <label class="form-label mb-0" for="zoomWeight">Weight</label>
+                </div>
+                <div class="col-auto">
+                  <select id="zoomEasing" class="form-select form-select-sm">
+                    <option value="linear">Linear</option>
+                    <option value="easeIn">Ease In</option>
+                    <option value="easeOut">Ease Out</option>
+                    <option value="easeInOut">Ease In-Out</option>
+                  </select>
+                </div>
+                <div class="col-auto">
+                  <select id="zoomPattern" class="form-select form-select-sm">
+                    <option value="sin">Sinusoidal</option>
+                    <option value="pulse">Pulse</option>
+                    <option value="ramp">Ramp</option>
+                  </select>
+                </div>
+                <div class="col-auto">
+                  <button id="resetZoomBtn" class="btn btn-secondary btn-sm">Reset</button>
+                </div>
+              </div>
+              <div class="row g-1 align-items-center mt-2">
+                <div class="col-auto">
+                  <label for="zoomAddendumInput" class="col-form-label mb-0">Zoom ±%</label>
+                </div>
+                <div class="col-auto">
+                  <input id="zoomAddendumInput" type="number" class="form-control form-control-sm" min="1" max="90" value="10" style="width:60px;">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Node Animation Controls -->
+        <div class="accordion-item">
+          <h2 class="accordion-header" id="headingNodeAnim">
+            <button class="accordion-button py-2 collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseNodeAnim" aria-expanded="false" aria-controls="collapseNodeAnim">
+              🌀 Node Animation
+            </button>
+          </h2>
+          <div id="collapseNodeAnim" class="accordion-collapse collapse" aria-labelledby="headingNodeAnim" data-bs-parent="#controlsAccordion">
+            <div class="accordion-body py-2">
+              <!-- Position Animation -->
+              <div class="row g-1 mb-2 align-items-center">
+                <div class="col-auto"><label for="nodeAnimPatternPos" class="form-label mb-0">Pos</label></div>
+                <div class="col-auto">
+                  <select id="nodeAnimPatternPos" class="form-select form-select-sm">
+                    <option value="none">None</option>
+                    <option value="sine">Sine</option>
+                    <option value="diagonal">Diagonal</option>
+                    <option value="circular">Circular</option>
+                  </select>
+                </div>
+                <div class="col-auto"><label for="nodeAnimPosAmp" class="form-label mb-0">Amp</label><input id="nodeAnimPosAmp" type="number" class="form-control form-control-sm" min="0" max="10" step="0.01" value="0.5" style="width:60px;"></div>
+                <div class="col-auto"><label for="nodeAnimPosFreq" class="form-label mb-0">Freq</label><input id="nodeAnimPosFreq" type="number" class="form-control form-control-sm" min="0" max="10" step="0.01" value="1" style="width:60px;"></div>
+                <div class="col-auto"><label for="nodeAnimPosPhase" class="form-label mb-0">Phase</label><input id="nodeAnimPosPhase" type="number" class="form-control form-control-sm" min="0" max="10" step="0.01" value="0" style="width:60px;"></div>
+              </div>
+              <!-- Zoom Animation -->
+              <div class="row g-1 mb-2 align-items-center">
+                <div class="col-auto"><label for="nodeAnimPatternZoom" class="form-label mb-0">Zoom</label></div>
+                <div class="col-auto">
+                  <select id="nodeAnimPatternZoom" class="form-select form-select-sm">
+                    <option value="none">None</option>
+                    <option value="sine">Sine</option>
+                    <option value="diagonal">Diagonal</option>
+                    <option value="circular">Circular</option>
+                  </select>
+                </div>
+                <div class="col-auto"><label for="nodeAnimZoomAmp" class="form-label mb-0">Amp</label><input id="nodeAnimZoomAmp" type="number" class="form-control form-control-sm" min="0" max="10" step="0.01" value="0.2" style="width:60px;"></div>
+                <div class="col-auto"><label for="nodeAnimZoomFreq" class="form-label mb-0">Freq</label><input id="nodeAnimZoomFreq" type="number" class="form-control form-control-sm" min="0" max="10" step="0.01" value="1" style="width:60px;"></div>
+                <div class="col-auto"><label for="nodeAnimZoomPhase" class="form-label mb-0">Phase</label><input id="nodeAnimZoomPhase" type="number" class="form-control form-control-sm" min="0" max="10" step="0.01" value="0" style="width:60px;"></div>
+              </div>
+              <!-- Rotation Animation -->
+              <div class="row g-1 mb-2 align-items-center">
+                <div class="col-auto"><label for="nodeAnimPatternRot" class="form-label mb-0">Rot</label></div>
+                <div class="col-auto">
+                  <select id="nodeAnimPatternRot" class="form-select form-select-sm">
+                    <option value="none">None</option>
+                    <option value="sine">Sine</option>
+                    <option value="diagonal">Diagonal</option>
+                    <option value="circular">Circular</option>
+                  </select>
+                </div>
+                <div class="col-auto"><label for="nodeAnimRotAmp" class="form-label mb-0">Amp</label><input id="nodeAnimRotAmp" type="number" class="form-control form-control-sm" min="0" max="10" step="0.01" value="0.2" style="width:60px;"></div>
+                <div class="col-auto"><label for="nodeAnimRotFreq" class="form-label mb-0">Freq</label><input id="nodeAnimRotFreq" type="number" class="form-control form-control-sm" min="0" max="10" step="0.01" value="1" style="width:60px;"></div>
+                <div class="col-auto"><label for="nodeAnimRotPhase" class="form-label mb-0">Phase</label><input id="nodeAnimRotPhase" type="number" class="form-control form-control-sm" min="0" max="10" step="0.01" value="0" style="width:60px;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Postprocessing Controls (collapsed by default) -->
+        <div class="accordion-item">
+          <h2 class="accordion-header" id="headingPostprocessing">
+            <button class="accordion-button py-2 collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapsePostprocessing" aria-expanded="false" aria-controls="collapsePostprocessing">
+              ✨ Postprocessing
+            </button>
+          </h2>
+          <div id="collapsePostprocessing" class="accordion-collapse collapse" aria-labelledby="headingPostprocessing" data-bs-parent="#controlsAccordion">
+            <div class="accordion-body py-2">
+              <!-- Bloom -->
+              <div class="row g-1 mb-2 align-items-center">
+                <div class="col-auto"><input class="form-check-input" type="checkbox" id="bloomToggle" checked></div>
+                <div class="col-auto"><label for="bloomToggle" class="form-label mb-0">Bloom</label></div>
+                <div class="col-auto"><label for="bloomStrength" class="form-label mb-0">Strength</label><input id="bloomStrength" type="range" class="form-range form-range-sm" min="0" max="3" step="0.01" value="1.5" style="width:70px;"></div>
+                <div class="col-auto"><label for="bloomRadius" class="form-label mb-0">Radius</label><input id="bloomRadius" type="range" class="form-range form-range-sm" min="0" max="1" step="0.01" value="0.4" style="width:70px;"></div>
+                <div class="col-auto"><label for="bloomThreshold" class="form-label mb-0">Thresh</label><input id="bloomThreshold" type="range" class="form-range form-range-sm" min="0" max="1" step="0.01" value="0.85" style="width:70px;"></div>
+              </div>
+              <!-- Afterimage -->
+              <div class="row g-1 mb-2 align-items-center">
+                <div class="col-auto"><input class="form-check-input" type="checkbox" id="afterimageToggle"></div>
+                <div class="col-auto"><label for="afterimageToggle" class="form-label mb-0">Afterimage</label></div>
+                <div class="col-auto"><label for="afterimageDamp" class="form-label mb-0">Damp</label><input id="afterimageDamp" type="range" class="form-range form-range-sm" min="0" max="1" step="0.001" value="0.96" style="width:70px;"></div>
+              </div>
+              <!-- Halftone -->
+              <div class="row g-1 mb-2 align-items-center">
+                <div class="col-auto"><input class="form-check-input" type="checkbox" id="halftoneToggle"></div>
+                <div class="col-auto"><label for="halftoneToggle" class="form-label mb-0">Halftone</label></div>
+                <div class="col-auto"><label for="halftoneRadius" class="form-label mb-0">Radius</label><input id="halftoneRadius" type="range" class="form-range form-range-sm" min="1" max="25" step="1" value="4" style="width:70px;"></div>
+              </div>
+              <!-- DotScreen -->
+              <div class="row g-1 mb-2 align-items-center">
+                <div class="col-auto"><input class="form-check-input" type="checkbox" id="dotscreenToggle"></div>
+                <div class="col-auto"><label for="dotscreenToggle" class="form-label mb-0">DotScreen</label></div>
+                <div class="col-auto"><label for="dotscreenScale" class="form-label mb-0">Scale</label><input id="dotscreenScale" type="range" class="form-range form-range-sm" min="0.1" max="2" step="0.01" value="1" style="width:70px;"></div>
+                <div class="col-auto"><label for="dotscreenAngle" class="form-label mb-0">Angle</label><input id="dotscreenAngle" type="range" class="form-range form-range-sm" min="0" max="6.283" step="0.01" value="1.57" style="width:70px;"></div>
+                <div class="col-auto"><label for="dotscreenCenterX" class="form-label mb-0">Center X</label><input id="dotscreenCenterX" type="number" class="form-control form-control-sm" min="-1" max="1" step="0.01" value="0.5" style="width:60px;"></div>
+                <div class="col-auto"><label for="dotscreenCenterY" class="form-label mb-0">Center Y</label><input id="dotscreenCenterY" type="number" class="form-control form-control-sm" min="-1" max="1" step="0.01" value="0.5" style="width:60px;"></div>
+              </div>
+              <!-- RGB Shift -->
+              <div class="row g-1 mb-2 align-items-center">
+                <div class="col-auto"><input class="form-check-input" type="checkbox" id="rgbshiftToggle"></div>
+                <div class="col-auto"><label for="rgbshiftToggle" class="form-label mb-0">RGB Shift</label></div>
+                <div class="col-auto"><label for="rgbshiftAmount" class="form-label mb-0">Amount</label><input id="rgbshiftAmount" type="range" class="form-range form-range-sm" min="0" max="0.05" step="0.0001" value="0.0015" style="width:70px;"></div>
+              </div>
+              <!-- Sepia -->
+              <div class="row g-1 mb-2 align-items-center">
+                <div class="col-auto"><input class="form-check-input" type="checkbox" id="sepiaToggle"></div>
+                <div class="col-auto"><label for="sepiaToggle" class="form-label mb-0">Sepia</label></div>
+                <div class="col-auto"><label for="sepiaAmount" class="form-label mb-0">Amount</label><input id="sepiaAmount" type="range" class="form-range form-range-sm" min="0" max="1" step="0.01" value="0.9" style="width:70px;"></div>
+              </div>
+              <!-- Vignette -->
+              <div class="row g-1 mb-2 align-items-center">
+                <div class="col-auto"><input class="form-check-input" type="checkbox" id="vignetteToggle"></div>
+                <div class="col-auto"><label for="vignetteToggle" class="form-label mb-0">Vignette</label></div>
+                <div class="col-auto"><label for="vignetteOffset" class="form-label mb-0">Offset</label><input id="vignetteOffset" type="range" class="form-range form-range-sm" min="0" max="3" step="0.01" value="1.6" style="width:70px;"></div>
+                <div class="col-auto"><label for="vignetteDarkness" class="form-label mb-0">Dark</label><input id="vignetteDarkness" type="range" class="form-range form-range-sm" min="0" max="2" step="0.01" value="0.95" style="width:70px;"></div>
+              </div>
+              <!-- Film -->
+              <div class="row g-1 mb-2 align-items-center">
+                <div class="col-auto"><input class="form-check-input" type="checkbox" id="filmToggle"></div>
+                <div class="col-auto"><label for="filmToggle" class="form-label mb-0">Film</label></div>
+                <div class="col-auto"><label for="filmNoiseIntensity" class="form-label mb-0">Noise</label><input id="filmNoiseIntensity" type="range" class="form-range form-range-sm" min="0" max="1" step="0.01" value="0.35" style="width:70px;"></div>
+                <div class="col-auto"><label for="filmScanlinesIntensity" class="form-label mb-0">Scanlines</label><input id="filmScanlinesIntensity" type="range" class="form-range form-range-sm" min="0" max="1" step="0.01" value="0.35" style="width:70px;"></div>
+                <div class="col-auto"><label for="filmScanlinesCount" class="form-label mb-0">Count</label><input id="filmScanlinesCount" type="range" class="form-range form-range-sm" min="0" max="4096" step="1" value="4096" style="width:70px;"></div>
+                <div class="col-auto"><label for="filmGrayscale" class="form-label mb-0">Gray</label><input id="filmGrayscale" type="checkbox"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Add a toggle to show/hide the alignment 3D object -->
+        <div class="row g-1 mb-2 align-items-center">
+          <div class="col-auto">
+            <input class="form-check-input" type="checkbox" id="showAlignmentObjectToggle">
+            <label class="form-check-label mb-0" for="showAlignmentObjectToggle">Show 3D Alignment Object</label>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="diagnosticOverlay" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:1000;background:rgba(0,0,0,0.7);color:#fff;align-items:center;justify-content:center;font-size:2rem;text-align:center;pointer-events:none;">
+    <span id="diagnosticMessage"></span>
+  </div>
+  <script type="module">
+    import * as THREE from 'three';
+    import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+    import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+    import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+    import { AfterimagePass } from 'three/examples/jsm/postprocessing/AfterimagePass.js';
+    import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+    import { HalftonePass } from 'three/examples/jsm/postprocessing/HalftonePass.js';
+    import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+    import { DotScreenShader } from 'three/examples/jsm/shaders/DotScreenShader.js';
+    import { RGBShiftShader } from 'three/examples/jsm/shaders/RGBShiftShader.js';
+    import { SepiaShader } from 'three/examples/jsm/shaders/SepiaShader.js';
+    import { VignetteShader } from 'three/examples/jsm/shaders/VignetteShader.js';
+    import { FilmPass } from 'three/examples/jsm/postprocessing/FilmPass.js';
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+    camera.position.z = 5;
+
+    let renderer;
+
+    function createRenderer({ width, height, preserveDrawingBuffer } = {}) {
+      const r = new THREE.WebGLRenderer({
+        antialias: true,
+        preserveDrawingBuffer: preserveDrawingBuffer || false
+      });
+      r.setPixelRatio(1);
+      r.setSize(width, height, false);
+      r.outputColorSpace = THREE.SRGBColorSpace;
+      return r;
+    }
+
+    // Initial renderer for display
+    renderer = createRenderer({
+      width: window.innerWidth,
+      height: window.innerHeight,
+      preserveDrawingBuffer: false
+    });
+    document.body.appendChild(renderer.domElement);
+
+    let capturer;
+    let isRecording = false;
+    let frameCount = 0;
+    let RECORD_FPS = 60;
+    let RECORD_WIDTH = 1920;
+    let RECORD_HEIGHT = 1080;
+
+    // Cache structure: { [folder]: { [filename]: texture } }
+    const textureCache = { '32': {}, '72': {}, '128': {}, '512': {} };
+
+    // Move loader to top-level scope for global access
+    const loader = new THREE.TextureLoader();
+
+    // Postprocessing pipeline setup
+    let composer, renderPass, bloomPass, afterimagePass, halftonePass, dotScreenPass, rgbShiftPass, sepiaPass, vignettePass, filmPass, outputPass;
+    function setupPostprocessing() {
+      composer = new EffectComposer(renderer);
+      renderPass = new RenderPass(scene, camera);
+      composer.addPass(renderPass);
+      // Bloom
+      bloomPass = new UnrealBloomPass(
+        new THREE.Vector2(window.innerWidth, window.innerHeight),
+        parseFloat(document.getElementById('bloomStrength').value),
+        parseFloat(document.getElementById('bloomRadius').value),
+        parseFloat(document.getElementById('bloomThreshold').value)
+      );
+      // Afterimage
+      afterimagePass = new AfterimagePass();
+      afterimagePass.uniforms['damp'].value = parseFloat(document.getElementById('afterimageDamp').value);
+      // Halftone
+      halftonePass = new HalftonePass({ radius: parseInt(document.getElementById('halftoneRadius').value) });
+      // DotScreen
+      dotScreenPass = new ShaderPass(DotScreenShader);
+      dotScreenPass.uniforms['scale'].value = parseFloat(document.getElementById('dotscreenScale').value);
+      dotScreenPass.uniforms['angle'].value = parseFloat(document.getElementById('dotscreenAngle').value);
+      dotScreenPass.uniforms['center'].value.set(
+        parseFloat(document.getElementById('dotscreenCenterX').value),
+        parseFloat(document.getElementById('dotscreenCenterY').value)
+      );
+      // RGBShift
+      rgbShiftPass = new ShaderPass(RGBShiftShader);
+      // Sepia
+      sepiaPass = new ShaderPass(SepiaShader);
+      // Vignette
+      vignettePass = new ShaderPass(VignetteShader);
+      // Film
+      filmPass = new FilmPass(0.35);
+      // Output
+      outputPass = new OutputPass();
+      // Add passes based on UI
+      if (document.getElementById('bloomToggle').checked) composer.addPass(bloomPass);
+      if (document.getElementById('afterimageToggle').checked) composer.addPass(afterimagePass);
+      if (document.getElementById('halftoneToggle').checked) composer.addPass(halftonePass);
+      if (document.getElementById('dotscreenToggle').checked) composer.addPass(dotScreenPass);
+      if (document.getElementById('rgbshiftToggle').checked) composer.addPass(rgbShiftPass);
+      if (document.getElementById('sepiaToggle').checked) composer.addPass(sepiaPass);
+      if (document.getElementById('vignetteToggle').checked) composer.addPass(vignettePass);
+      if (document.getElementById('filmToggle').checked) composer.addPass(filmPass);
+      composer.addPass(outputPass);
+    }
+    setupPostprocessing();
+    // Re-setup postprocessing when toggles/params change
+    ['bloomToggle','afterimageToggle','halftoneToggle','dotscreenToggle','rgbshiftToggle','sepiaToggle','vignetteToggle','filmToggle','bloomThreshold','bloomStrength','bloomRadius','afterimageDamp','halftoneRadius',
+     'dotscreenScale','dotscreenAngle','dotscreenCenterX','dotscreenCenterY'].forEach(id => {
+      document.getElementById(id).addEventListener('input', setupPostprocessing);
+    });
+    window.addEventListener('resize', () => {
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      composer.setSize(window.innerWidth, window.innerHeight);
+      bloomPass.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Improved: Select best resolution folder based on actual on-screen pixel width
+    function selectResolutionFolder(emojiScale, emojiPosition = new THREE.Vector3(0,0,0)) {
+      // Project two points: the emoji center, and a point offset by emojiScale in X
+      const width = renderer.domElement.width;
+      const cameraPos = emojiPosition.clone();
+      const cam = camera;
+      if (!cam) return '128'; // fallback
+      const p1 = cameraPos.clone();
+      const p2 = cameraPos.clone().add(new THREE.Vector3(emojiScale, 0, 0));
+      p1.project(cam);
+      p2.project(cam);
+      const sx1 = (p1.x * 0.5 + 0.5) * width;
+      const sx2 = (p2.x * 0.5 + 0.5) * width;
+      const pixelWidth = Math.abs(sx2 - sx1);
+      if (pixelWidth <= 40) return '32';
+      if (pixelWidth <= 100) return '72';
+      if (pixelWidth <= 200) return '128';
+      return '512';
+    }
+
+    // Set initial values for dimension controls
+    document.getElementById('widthInput').value = RECORD_WIDTH;
+    document.getElementById('heightInput').value = RECORD_HEIGHT;
+
+    document.getElementById('fpsInput').addEventListener('change', (e) => {
+      if (!isRecording) {
+        RECORD_FPS = parseInt(e.target.value) || 60;
+        syncRecordTimeFields('fps');
+      }
+    });
+    document.getElementById('widthInput').addEventListener('change', (e) => {
+      if (!isRecording) {
+        RECORD_WIDTH = parseInt(e.target.value) || window.innerWidth;
+      }
+    });
+    document.getElementById('heightInput').addEventListener('change', (e) => {
+      if (!isRecording) {
+        RECORD_HEIGHT = parseInt(e.target.value) || window.innerHeight;
+      }
+    });
+
+    function startRecording() {
+      // Hide UI overlays for clean video
+      document.getElementById('recordingOffcanvas').style.display = 'none';
+      document.getElementById('diagnosticOverlay').style.display = 'none';
+      renderer.setSize(RECORD_WIDTH, RECORD_HEIGHT, false);
+      renderer.setPixelRatio(1);
+      capturer = new CCapture({
+        format: 'webm',
+        framerate: RECORD_FPS,
+        quality: 100,
+        verbose: false,
+        name: 'emoji-sprites',
+        display: true
+      });
+      capturer.start();
+      isRecording = true;
+      frameCount = 0;
+      document.getElementById('recordingStatus').textContent = `Recording... (${RECORD_WIDTH}x${RECORD_HEIGHT} @ ${RECORD_FPS}fps)`;
+      document.getElementById('recordingStatus').classList.remove('text-danger');
+      document.getElementById('recordingStatus').classList.add('text-success');
+      document.getElementById('startRecordingBtn').disabled = true;
+      document.getElementById('stopRecordingBtn').disabled = false;
+      document.getElementById('fpsInput').disabled = true;
+      document.getElementById('widthInput').disabled = true;
+      document.getElementById('heightInput').disabled = true;
+      console.log('Recording started');
+    }
+
+    function stopRecording() {
+      isRecording = false;
+      capturer.stop();
+      capturer.save(null, 'emoji-sprites.webm');
+      // Restore UI overlays
+      document.getElementById('recordingOffcanvas').style.display = '';
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(window.devicePixelRatio);
+      document.getElementById('recordingStatus').textContent = 'Recording stopped and saved.';
+      document.getElementById('recordingStatus').classList.remove('text-success');
+      document.getElementById('recordingStatus').classList.add('text-danger');
+      document.getElementById('startRecordingBtn').disabled = false;
+      document.getElementById('stopRecordingBtn').disabled = true;
+      document.getElementById('fpsInput').disabled = false;
+      document.getElementById('widthInput').disabled = false;
+      document.getElementById('heightInput').disabled = false;
+    }
+
+    document.getElementById('startRecordingBtn').addEventListener('click', startRecording);
+    document.getElementById('stopRecordingBtn').addEventListener('click', stopRecording);
+    document.getElementById('stopRecordingBtn').disabled = true;
+
+    // Load emoji sets from assets/sets.json
+    async function loadEmojiSetList() {
+      const response = await fetch('assets/sets.json');
+      if (!response.ok) throw new Error('Failed to load assets/sets.json');
+      return await response.json(); // array of filenames
+    }
+    async function loadEmojiSetFile(filename) {
+      const response = await fetch(`assets/sets/${filename}`);
+      if (!response.ok) throw new Error(`Failed to load assets/sets/${filename}`);
+      return await response.json();
+    }
+
+    // Helper to get n random unique elements from an array
+    function getRandomElements(arr, n) {
+      const result = [];
+      const taken = new Set();
+      while (result.length < n && taken.size < arr.length) {
+        const idx = Math.floor(Math.random() * arr.length);
+        if (!taken.has(idx)) {
+          taken.add(idx);
+          result.push(arr[idx]);
+        }
+      }
+      return result;
+    }
+
+    function getCachedTexture(filename, folder) {
+      if (textureCache[folder][filename]) return textureCache[folder][filename];
+      // Use jsdelivr CDN for emoji PNGs
+      const url = `https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji/png/${folder}/${filename}`;
+      const tex = loader.load(
+        url,
+        undefined,
+        undefined,
+        (err) => {
+          // On error, use fallback
+          console.warn('Missing emoji PNG, using fallback:', url);
+          // Create a 1x1 transparent texture as fallback
+          const fallback = new THREE.Texture(document.createElement('canvas'));
+          fallback.needsUpdate = true;
+          fallback.minFilter = THREE.LinearFilter;
+          fallback.magFilter = THREE.LinearFilter;
+          textureCache[folder][filename] = fallback;
+        }
+      );
+      tex.minFilter = THREE.LinearFilter;
+      tex.magFilter = THREE.LinearFilter;
+      textureCache[folder][filename] = tex;
+      return tex;
+    }
+
+    // Async check if a PNG exists by attempting to load it
+    function checkImageExists(url) {
+      return new Promise((resolve) => {
+        const img = new window.Image();
+        img.onload = () => resolve(true);
+        img.onerror = () => resolve(false);
+        img.src = url;
+      });
+    }
+
+    // Filter emoji filenames to only those whose PNGs exist
+    async function filterExistingEmojiFilenames(filenames, folder) {
+      // Use jsdelivr CDN for emoji PNGs
+      const checks = await Promise.all(
+        filenames.map(fn => checkImageExists(`https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji/png/${folder}/${fn}`))
+      );
+      return filenames.filter((fn, i) => checks[i]);
+    }
+
+    async function main() {
+      let emojiSetFiles = await loadEmojiSetList(); // array of filenames
+      const emojiSetFileSelect = document.getElementById('emojiSetFileSelect');
+      const emojiGroupSelect = document.getElementById('emojiGroupSelect');
+      emojiSetFileSelect.innerHTML = '';
+      emojiSetFiles.forEach(filename => {
+        const opt = document.createElement('option');
+        opt.value = filename;
+        opt.textContent = filename.replace(/\.json$/, '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        emojiSetFileSelect.appendChild(opt);
+      });
+      // Store loaded emoji sets in a cache
+      const emojiSetCache = {};
+      // Helper to get group keys from a set file
+      function getGroupKeysFromSet(setData) {
+        if (Array.isArray(setData)) return ['default'];
+        if (typeof setData === 'object' && setData !== null) return Object.keys(setData);
+        return [];
+      }
+      // Helper to get emoji list for a group
+      function getEmojiListFromSet(setData, groupKey) {
+        if (Array.isArray(setData)) return setData;
+        if (typeof setData === 'object' && setData !== null) {
+          let val = setData[groupKey];
+          if (Array.isArray(val)) return val;
+          if (typeof val === 'string') return val.split(';').map(e => e.trim()).filter(Boolean);
+          return [];
+        }
+        return [];
+      }
+      // Track current set data
+      let currentSetData = null;
+      let currentSetFile = null;
+      let currentGroupKey = null;
+      // Populate group dropdown for a set file
+      async function populateGroupDropdown(setFile) {
+        if (!emojiSetCache[setFile]) {
+          emojiSetCache[setFile] = await loadEmojiSetFile(setFile);
+        }
+        currentSetData = emojiSetCache[setFile];
+        currentSetFile = setFile;
+        const groupKeys = getGroupKeysFromSet(currentSetData);
+        emojiGroupSelect.innerHTML = '';
+        groupKeys.forEach(key => {
+          const opt = document.createElement('option');
+          opt.value = key;
+          opt.textContent = key.charAt(0).toUpperCase() + key.slice(1);
+          emojiGroupSelect.appendChild(opt);
+        });
+        // Select first group by default
+        currentGroupKey = groupKeys[0];
+        emojiGroupSelect.value = currentGroupKey;
+      }
+      // Helper to get emoji filenames for current group
+      function getFilenamesForCurrentGroup() {
+        const emojiList = getEmojiListFromSet(currentSetData, currentGroupKey);
+        if (!emojiList) return [];
+        return emojiList.map(e => {
+          if (!e) return undefined;
+          // Support multi-codepoint emojis
+          const codepoints = Array.from(e).map(c => c.codePointAt(0).toString(16)).join('_');
+          return `emoji_u${codepoints}.png`;
+        }).filter(Boolean);
+      }
+      // Controls
+      const emojiCountInput = document.getElementById('emojiCountInput');
+      const emojiSizeInput = document.getElementById('emojiSizeInput');
+      const gridSpacingInput = document.getElementById('gridSpacingInput');
+      const gridPatternSelect = document.getElementById('gridPatternSelect');
+      const nodeAnimPatternPos = document.getElementById('nodeAnimPatternPos');
+      const nodeAnimPatternZoom = document.getElementById('nodeAnimPatternZoom');
+      const nodeAnimPatternRot = document.getElementById('nodeAnimPatternRot');
+      const nodeAnimPosAmp = document.getElementById('nodeAnimPosAmp');
+      const nodeAnimPosFreq = document.getElementById('nodeAnimPosFreq');
+      const nodeAnimPosPhase = document.getElementById('nodeAnimPosPhase');
+      const nodeAnimZoomAmp = document.getElementById('nodeAnimZoomAmp');
+      const nodeAnimZoomFreq = document.getElementById('nodeAnimZoomFreq');
+      const nodeAnimZoomPhase = document.getElementById('nodeAnimZoomPhase');
+      const nodeAnimRotAmp = document.getElementById('nodeAnimRotAmp');
+      const nodeAnimRotFreq = document.getElementById('nodeAnimRotFreq');
+      const nodeAnimRotPhase = document.getElementById('nodeAnimRotPhase');
+      const rotationToggle = document.getElementById('rotationToggle');
+      const rotationEasing = document.getElementById('rotationEasing');
+      const rotationPattern = document.getElementById('rotationPattern');
+      const resetRotationBtn = document.getElementById('resetRotationBtn');
+      const zoomToggle = document.getElementById('zoomToggle');
+      const zoomEasing = document.getElementById('zoomEasing');
+      const zoomPattern = document.getElementById('zoomPattern');
+      const resetZoomBtn = document.getElementById('resetZoomBtn');
+      const zoomAddendumInput = document.getElementById('zoomAddendumInput');
+      const rotationWeight = document.getElementById('rotationWeight');
+      const zoomWeight = document.getElementById('zoomWeight');
+      const gridScaleInput = document.getElementById('gridScaleInput');
+      const gridScaleNumber = document.getElementById('gridScaleNumber');
+      // Arrangement mode
+      let arrangeMode = 'grid';
+      document.querySelectorAll('input[name="arrangeMode"]').forEach(el => {
+        el.addEventListener('change', (e) => {
+          arrangeMode = e.target.value;
+          updateEmojis();
+        });
+      });
+      // Emoji state
+      let N = parseInt(emojiCountInput.value) || 10;
+      let selectedEmojis = [];
+      let sprites = [];
+      let rotationSpeeds = [];
+      let velocities = [];
+      let baseScales = [];
+      // Update emoji selection and sprites
+      async function updateEmojis() {
+        // Remove old sprites
+        sprites.forEach(sprite => scene.remove(sprite));
+        N = parseInt(emojiCountInput.value) || 10;
+        const allFiles = getFilenamesForCurrentGroup();
+        // Determine emoji scale and resolution folder
+        let emojiScale;
+        if (arrangeMode === 'grid') {
+          const scaleFactor = parseFloat(gridScaleInput.value) || 1;
+          emojiScale = (parseFloat(emojiSizeInput.value) || 1) * scaleFactor;
+        } else {
+          emojiScale = 1; // random mode: use default
+        }
+        // Use center as representative position
+        const resFolder = selectResolutionFolder(emojiScale, new THREE.Vector3(0,0,0));
+        // Only use files that exist
+        const filteredFiles = await filterExistingEmojiFilenames(allFiles, resFolder);
+        sprites = [];
+        rotationSpeeds = [];
+        velocities = [];
+        baseScales = [];
+        // Fill missing nodes if needed
+        if (sprites.length < N) {
+          // Get current emoji group selection
+          const groupKey = emojiGroupSelect.value;
+          const filteredFiles = getFilenamesForCurrentGroup();
+          // Add as many as needed
+          const needed = N - sprites.length;
+          const newEmojis = getRandomElements(filteredFiles, needed);
+          for (let i = 0; i < needed; i++) {
+            const filename = newEmojis[i % newEmojis.length];
+            if (!filename) {
+              console.warn('Skipped undefined filename when filling grid at index', i);
+              continue;
+            }
+            const texture = getCachedTexture(filename, resFolder);
+            const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true, alphaTest: 0.01 });
+            const mesh = new THREE.Mesh(new THREE.PlaneGeometry(emojiScale, emojiScale), material);
+            scene.add(mesh);
+            sprites.push(mesh);
+            rotationSpeeds.push((Math.random() - 0.5) * 0.1);
+            velocities.push({x: 0, y: 0, z: 0});
+          }
+        } else if (sprites.length > N) {
+          // Remove extra sprites
+          for (let i = sprites.length - 1; i >= N; i--) {
+            scene.remove(sprites[i]);
+            sprites.splice(i, 1);
+            rotationSpeeds.splice(i, 1);
+            velocities.splice(i, 1);
+          }
+        }
+        const pattern = gridPatternSelect.value;
+        const nodeAnimPattern = {
+          pos: nodeAnimPatternPos.value,
+          zoom: nodeAnimPatternZoom.value,
+          rot: nodeAnimPatternRot.value
+        };
+        const nodeAnimParams = {
+          pos: {
+            amp: parseFloat(nodeAnimPosAmp.value) || 0,
+            freq: parseFloat(nodeAnimPosFreq.value) || 1,
+            phase: parseFloat(nodeAnimPosPhase.value) || 0
+          },
+          zoom: {
+            amp: parseFloat(nodeAnimZoomAmp.value) || 0,
+            freq: parseFloat(nodeAnimZoomFreq.value) || 1,
+            phase: parseFloat(nodeAnimZoomPhase.value) || 0
+          },
+          rot: {
+            amp: parseFloat(nodeAnimRotAmp.value) || 0,
+            freq: parseFloat(nodeAnimRotFreq.value) || 1,
+            phase: parseFloat(nodeAnimRotPhase.value) || 0
+          }
+        };
+        let i = 0;
+        if (pattern === 'normal') {
+          for (let row = 0; row < N; row++) {
+            for (let col = 0; col < N; col++) {
+              if (i >= sprites.length) break;
+              const x = -N / 2 + col;
+              const y = N / 2 - row;
+              sprites[i].userData.grid = {row, col, x, y};
+              sprites[i].position.set(x, y, 0);
+              sprites[i].scale.set(emojiScale, emojiScale, 1);
+              velocities[i] = {x: 0, y: 0, z: 0};
+              i++;
+            }
+          }
+        } else if (pattern === 'hstripes') {
+          for (let row = 0; row < N; row++) {
+            for (let col = 0; col < N; col++) {
+              if (i >= sprites.length) break;
+              const x = -N / 2 + col;
+              const y = N / 2 - row;
+              sprites[i].userData.grid = {row, col, x, y};
+              sprites[i].position.set(x, y, 0);
+              sprites[i].scale.set(emojiScale, emojiScale, 1);
+              velocities[i] = {x: 0, y: 0, z: 0};
+              i++;
+            }
+          }
+        } else if (pattern === 'vstripes') {
+          for (let row = 0; row < N; row++) {
+            for (let col = 0; col < N; col++) {
+              if (i >= sprites.length) break;
+              const x = -N / 2 + col;
+              const y = N / 2 - row;
+              sprites[i].userData.grid = {row, col, x, y};
+              sprites[i].position.set(x, y, 0);
+              sprites[i].scale.set(emojiScale, emojiScale, 1);
+              velocities[i] = {x: 0, y: 0, z: 0};
+              i++;
+            }
+          }
+        } else if (pattern === 'swirl') {
+          // Swirl: helix in 3D
+          const turns = 2;
+          for (let i = 0; i < sprites.length; i++) {
+            const t = i / sprites.length;
+            const angle = t * turns * Math.PI * 2;
+            const radius = 4;
+            const height = 6 * (t - 0.5);
+            const x = Math.cos(angle) * radius;
+            const y = height;
+            const z = Math.sin(angle) * radius;
+            sprites[i].position.set(x, y, z);
+            sprites[i].scale.set(emojiScale, emojiScale, 1);
+            velocities[i] = {x: 0, y: 0, z: 0};
+            const resFolder = selectResolutionFolder(emojiScale, new THREE.Vector3(x, y, z));
+            const filename = filteredFiles[i % filteredFiles.length];
+            sprites[i].material.map = getCachedTexture(filename, resFolder);
+            sprites[i].material.needsUpdate = true;
+            // Orient mesh to surface normal
+            const normal = getSurfaceNormal('swirl', x, y, z, t);
+            if (normal) sprites[i].lookAt(sprites[i].position.clone().add(normal));
+          }
+        } else if (pattern === 'torus') {
+          // Torus: ring in 3D
+          const R = 4, r = 1.2;
+          for (let i = 0; i < sprites.length; i++) {
+            const t = i / sprites.length;
+            const angle = t * Math.PI * 2;
+            const phi = t * Math.PI * 4; // twist
+            const x = (R + r * Math.cos(phi)) * Math.cos(angle);
+            const y = r * Math.sin(phi);
+            const z = (R + r * Math.cos(phi)) * Math.sin(angle);
+            sprites[i].position.set(x, y, z);
+            sprites[i].scale.set(emojiScale, emojiScale, 1);
+            velocities[i] = {x: 0, y: 0, z: 0};
+            const resFolder = selectResolutionFolder(emojiScale, new THREE.Vector3(x, y, z));
+            const filename = filteredFiles[i % filteredFiles.length];
+            sprites[i].material.map = getCachedTexture(filename, resFolder);
+            sprites[i].material.needsUpdate = true;
+            // Orient mesh to surface normal
+            const normal = getSurfaceNormal('torus', x, y, z, t);
+            if (normal) sprites[i].lookAt(sprites[i].position.clone().add(normal));
+          }
+        } else if (pattern === 'spiral') {
+          // Spiral: conical spiral in 3D
+          const turns = 3;
+          for (let i = 0; i < sprites.length; i++) {
+            const t = i / sprites.length;
+            const angle = t * turns * Math.PI * 2;
+            const radius = 1 + 4 * t;
+            const height = 6 * (t - 0.5);
+            const x = Math.cos(angle) * radius;
+            const y = height;
+            const z = Math.sin(angle) * radius;
+            sprites[i].position.set(x, y, z);
+            sprites[i].scale.set(emojiScale, emojiScale, 1);
+            velocities[i] = {x: 0, y: 0, z: 0};
+            const resFolder = selectResolutionFolder(emojiScale, new THREE.Vector3(x, y, z));
+            const filename = filteredFiles[i % filteredFiles.length];
+            sprites[i].material.map = getCachedTexture(filename, resFolder);
+            sprites[i].material.needsUpdate = true;
+            // Orient mesh to surface normal
+            const normal = getSurfaceNormal('spiral', x, y, z, t);
+            if (normal) sprites[i].lookAt(sprites[i].position.clone().add(normal));
+          }
+        } else if (pattern === 'sphere') {
+          // Sphere: distribute points on a sphere using the golden spiral
+          const radius = 5;
+          const offset = 2 / sprites.length;
+          const increment = Math.PI * (3 - Math.sqrt(5));
+          for (let i = 0; i < sprites.length; i++) {
+            const y = ((i * offset) - 1) + (offset / 2);
+            const r = Math.sqrt(1 - y * y);
+            const phi = i * increment;
+            const x = Math.cos(phi) * r * radius;
+            const z = Math.sin(phi) * r * radius;
+            sprites[i].position.set(x, y * radius, z);
+            sprites[i].scale.set(emojiScale, emojiScale, 1);
+            velocities[i] = {x: 0, y: 0, z: 0};
+            const resFolder = selectResolutionFolder(emojiScale, new THREE.Vector3(x, y * radius, z));
+            const filename = filteredFiles[i % filteredFiles.length];
+            sprites[i].material.map = getCachedTexture(filename, resFolder);
+            sprites[i].material.needsUpdate = true;
+            // Orient mesh to surface normal
+            const normal = getSurfaceNormal('sphere', x, y * radius, z, t);
+            if (normal) sprites[i].lookAt(sprites[i].position.clone().add(normal));
+          }
+        } else {
+          // 2D patterns: keep facing camera
+          for (let i = 0; i < sprites.length; i++) {
+            sprites[i].lookAt(camera.position);
+          }
+        }
+        arrangeSprites();
+        // Diagnostic overlay if no emojis
+        const overlay = document.getElementById('diagnosticOverlay');
+        const msg = document.getElementById('diagnosticMessage');
+        if (sprites.length === 0) {
+          overlay.style.display = 'flex';
+          msg.textContent = 'No emojis loaded! Check your assets/files.json and emoji images.';
+        } else {
+          overlay.style.display = 'none';
+        }
+      }
+      // Only these should trigger updateEmojis
+      emojiCountInput.addEventListener('change', () => { if (arrangeMode === 'random') updateEmojis(); });
+      emojiSetFileSelect.addEventListener('change', async () => {
+        await populateGroupDropdown(emojiSetFileSelect.value);
+        await updateEmojis();
+      });
+      emojiGroupSelect.addEventListener('change', () => {
+        currentGroupKey = emojiGroupSelect.value;
+        updateEmojis();
+      });
+      // All other controls only rearrange sprites
+      emojiSizeInput.addEventListener('change', arrangeSprites);
+      gridSpacingInput.addEventListener('change', arrangeSprites);
+      gridPatternSelect.addEventListener('change', arrangeSprites);
+      [nodeAnimPatternPos, nodeAnimPatternZoom, nodeAnimPatternRot,
+       nodeAnimPosAmp, nodeAnimPosFreq, nodeAnimPosPhase,
+       nodeAnimZoomAmp, nodeAnimZoomFreq, nodeAnimZoomPhase,
+       nodeAnimRotAmp, nodeAnimRotFreq, nodeAnimRotPhase].forEach(el => {
+         el.addEventListener('change', arrangeSprites);
+       });
+      gridScaleInput.addEventListener('input', () => { gridScaleNumber.value = gridScaleInput.value; arrangeSprites(); });
+      gridScaleNumber.addEventListener('input', () => { gridScaleInput.value = gridScaleNumber.value; arrangeSprites(); });
+      // Arrangement logic
+      async function arrangeSprites() {
+        // Recalculate emojiScale and resFolder for this arrangement
+        let emojiScale;
+        if (arrangeMode === 'grid') {
+          const scaleFactor = parseFloat(gridScaleInput.value) || 1;
+          emojiScale = (parseFloat(emojiSizeInput.value) || 1) * scaleFactor;
+        } else {
+          emojiScale = 1;
+        }
+        // Use center as representative position
+        const resFolder = selectResolutionFolder(emojiScale, new THREE.Vector3(0,0,0));
+        // Only use files that exist
+        const allFiles = getFilenamesForCurrentGroup();
+        const filteredFiles = await filterExistingEmojiFilenames(allFiles, '512');
+        if (arrangeMode === 'grid') {
+          const scaleFactor = parseFloat(gridScaleInput.value) || 1;
+          const margin = (parseFloat(gridSpacingInput.value) || 0.2) * scaleFactor;
+          const aspect = RECORD_WIDTH / RECORD_HEIGHT;
+          const viewHeight = 10;
+          const viewWidth = viewHeight * aspect;
+          const cellSize = emojiScale + margin;
+          const cols = Math.floor((viewWidth + margin) / cellSize);
+          const rows = Math.floor((viewHeight + margin) / cellSize);
+          const gridCount = cols * rows;
+          // Fill missing nodes if needed
+          if (sprites.length < gridCount) {
+            const needed = gridCount - sprites.length;
+            const newEmojis = getRandomElements(filteredFiles, needed);
+            for (let i = 0; i < needed; i++) {
+              const filename = newEmojis[i % newEmojis.length];
+              if (!filename) continue;
+              const texture = getCachedTexture(filename, resFolder);
+              const material = new THREE.SpriteMaterial({ map: texture });
+              const sprite = new THREE.Sprite(material);
+              scene.add(sprite);
+              sprites.push(sprite);
+              rotationSpeeds.push((Math.random() - 0.5) * 0.1);
+              velocities.push({x: 0, y: 0, z: 0});
+            }
+          } else if (sprites.length > gridCount) {
+            for (let i = sprites.length - 1; i >= gridCount; i--) {
+              scene.remove(sprites[i]);
+              sprites.splice(i, 1);
+              rotationSpeeds.splice(i, 1);
+              velocities.splice(i, 1);
+            }
+          }
+          const pattern = gridPatternSelect.value;
+          let i = 0;
+          if (pattern === 'normal') {
+            for (let row = 0; row < rows; row++) {
+              for (let col = 0; col < cols; col++) {
+                if (i >= sprites.length) break;
+                const x = -viewWidth / 2 + margin + col * cellSize + emojiScale / 2;
+                const y = viewHeight / 2 - margin - row * cellSize - emojiScale / 2;
+                sprites[i].userData.grid = {row, col, x, y};
+                sprites[i].position.set(x, y, 0);
+                sprites[i].scale.set(emojiScale, emojiScale, 1);
+                velocities[i] = {x: 0, y: 0, z: 0};
+                // Per-emoji PNG selection
+                const resFolder = selectResolutionFolder(emojiScale, new THREE.Vector3(x, y, 0));
+                const filename = filteredFiles[i % filteredFiles.length];
+                sprites[i].material.map = getCachedTexture(filename, resFolder);
+                sprites[i].material.needsUpdate = true;
+                i++;
+              }
+            }
+          } else if (pattern === 'hstripes') {
+            for (let row = 0; row < rows; row++) {
+              for (let col = 0; col < cols; col++) {
+                if (i >= sprites.length) break;
+                const x = -viewWidth / 2 + margin + col * cellSize + emojiScale / 2;
+                const y = viewHeight / 2 - margin - row * cellSize - emojiScale / 2 + ((row % 2) * cellSize * 0.3);
+                sprites[i].userData.grid = {row, col, x, y};
+                sprites[i].position.set(x, y, 0);
+                sprites[i].scale.set(emojiScale, emojiScale, 1);
+                velocities[i] = {x: 0, y: 0, z: 0};
+                const resFolder = selectResolutionFolder(emojiScale, new THREE.Vector3(x, y, 0));
+                const filename = filteredFiles[i % filteredFiles.length];
+                sprites[i].material.map = getCachedTexture(filename, resFolder);
+                sprites[i].material.needsUpdate = true;
+                i++;
+              }
+            }
+          } else if (pattern === 'vstripes') {
+            for (let row = 0; row < rows; row++) {
+              for (let col = 0; col < cols; col++) {
+                if (i >= sprites.length) break;
+                const x = -viewWidth / 2 + margin + col * cellSize + emojiScale / 2 + ((col % 2) * cellSize * 0.3);
+                const y = viewHeight / 2 - margin - row * cellSize - emojiScale / 2;
+                sprites[i].userData.grid = {row, col, x, y};
+                sprites[i].position.set(x, y, 0);
+                sprites[i].scale.set(emojiScale, emojiScale, 1);
+                velocities[i] = {x: 0, y: 0, z: 0};
+                const resFolder = selectResolutionFolder(emojiScale, new THREE.Vector3(x, y, 0));
+                const filename = filteredFiles[i % filteredFiles.length];
+                sprites[i].material.map = getCachedTexture(filename, resFolder);
+                sprites[i].material.needsUpdate = true;
+                i++;
+              }
+            }
+          } else if (pattern === 'swirl') {
+            // Swirl: helix in 3D
+            const turns = 2;
+            for (let i = 0; i < sprites.length; i++) {
+              const t = i / sprites.length;
+              const angle = t * turns * Math.PI * 2;
+              const radius = 4;
+              const height = 6 * (t - 0.5);
+              const x = Math.cos(angle) * radius;
+              const y = height;
+              const z = Math.sin(angle) * radius;
+              sprites[i].position.set(x, y, z);
+              sprites[i].scale.set(emojiScale, emojiScale, 1);
+              velocities[i] = {x: 0, y: 0, z: 0};
+              const resFolder = selectResolutionFolder(emojiScale, new THREE.Vector3(x, y, z));
+              const filename = filteredFiles[i % filteredFiles.length];
+              sprites[i].material.map = getCachedTexture(filename, resFolder);
+              sprites[i].material.needsUpdate = true;
+              // Orient mesh to surface normal
+              const normal = getSurfaceNormal('swirl', x, y, z, t);
+              if (normal) sprites[i].lookAt(sprites[i].position.clone().add(normal));
+            }
+          } else if (pattern === 'torus') {
+            // Torus: ring in 3D
+            const R = 4, r = 1.2;
+            for (let i = 0; i < sprites.length; i++) {
+              const t = i / sprites.length;
+              const angle = t * Math.PI * 2;
+              const phi = t * Math.PI * 4; // twist
+              const x = (R + r * Math.cos(phi)) * Math.cos(angle);
+              const y = r * Math.sin(phi);
+              const z = (R + r * Math.cos(phi)) * Math.sin(angle);
+              sprites[i].position.set(x, y, z);
+              sprites[i].scale.set(emojiScale, emojiScale, 1);
+              velocities[i] = {x: 0, y: 0, z: 0};
+              const resFolder = selectResolutionFolder(emojiScale, new THREE.Vector3(x, y, z));
+              const filename = filteredFiles[i % filteredFiles.length];
+              sprites[i].material.map = getCachedTexture(filename, resFolder);
+              sprites[i].material.needsUpdate = true;
+              // Orient mesh to surface normal
+              const normal = getSurfaceNormal('torus', x, y, z, t);
+              if (normal) sprites[i].lookAt(sprites[i].position.clone().add(normal));
+            }
+          } else if (pattern === 'spiral') {
+            // Spiral: conical spiral in 3D
+            const turns = 3;
+            for (let i = 0; i < sprites.length; i++) {
+              const t = i / sprites.length;
+              const angle = t * turns * Math.PI * 2;
+              const radius = 1 + 4 * t;
+              const height = 6 * (t - 0.5);
+              const x = Math.cos(angle) * radius;
+              const y = height;
+              const z = Math.sin(angle) * radius;
+              sprites[i].position.set(x, y, z);
+              sprites[i].scale.set(emojiScale, emojiScale, 1);
+              velocities[i] = {x: 0, y: 0, z: 0};
+              const resFolder = selectResolutionFolder(emojiScale, new THREE.Vector3(x, y, z));
+              const filename = filteredFiles[i % filteredFiles.length];
+              sprites[i].material.map = getCachedTexture(filename, resFolder);
+              sprites[i].material.needsUpdate = true;
+              // Orient mesh to surface normal
+              const normal = getSurfaceNormal('spiral', x, y, z, t);
+              if (normal) sprites[i].lookAt(sprites[i].position.clone().add(normal));
+            }
+          } else if (pattern === 'sphere') {
+            // Sphere: distribute points on a sphere using the golden spiral
+            const radius = 5;
+            const offset = 2 / sprites.length;
+            const increment = Math.PI * (3 - Math.sqrt(5));
+            for (let i = 0; i < sprites.length; i++) {
+              const y = ((i * offset) - 1) + (offset / 2);
+              const r = Math.sqrt(1 - y * y);
+              const phi = i * increment;
+              const x = Math.cos(phi) * r * radius;
+              const z = Math.sin(phi) * r * radius;
+              sprites[i].position.set(x, y * radius, z);
+              sprites[i].scale.set(emojiScale, emojiScale, 1);
+              velocities[i] = {x: 0, y: 0, z: 0};
+              const resFolder = selectResolutionFolder(emojiScale, new THREE.Vector3(x, y * radius, z));
+              const filename = filteredFiles[i % filteredFiles.length];
+              sprites[i].material.map = getCachedTexture(filename, resFolder);
+              sprites[i].material.needsUpdate = true;
+              // Orient mesh to surface normal
+              const normal = getSurfaceNormal('sphere', x, y * radius, z, t);
+              if (normal) sprites[i].lookAt(sprites[i].position.clone().add(normal));
+            }
+          } else {
+            // 2D patterns: keep facing camera
+            for (let i = 0; i < sprites.length; i++) {
+              sprites[i].lookAt(camera.position);
+            }
+          }
+        } else {
+          // random mode
+          if (sprites.length < N) {
+            const needed = N - sprites.length;
+            const newEmojis = getRandomElements(filteredFiles, needed);
+            for (let i = 0; i < needed; i++) {
+              const filename = newEmojis[i % newEmojis.length];
+              if (!filename) continue;
+              const resFolder = selectResolutionFolder(emojiScale, new THREE.Vector3(0,0,0));
+              const texture = getCachedTexture(filename, resFolder);
+              const material = new THREE.SpriteMaterial({ map: texture, transparent: true, alphaTest: 0.01 });
+              const sprite = new THREE.Sprite(material);
+              scene.add(sprite);
+              sprites.push(sprite);
+              rotationSpeeds.push((Math.random() - 0.5) * 0.1);
+              velocities.push({x: 0, y: 0, z: 0});
+            }
+          } else if (sprites.length > N) {
+            for (let i = sprites.length - 1; i >= N; i--) {
+              scene.remove(sprites[i]);
+              sprites.splice(i, 1);
+              rotationSpeeds.splice(i, 1);
+              velocities.splice(i, 1);
+            }
+          }
+          sprites.forEach((sprite, index) => {
+            sprite.position.set(
+              (Math.random() - 0.5) * 10,
+              (Math.random() - 0.5) * 10,
+              (Math.random() - 0.5) * 10
+            );
+            const scale = Math.random() * 0.5 + 0.5;
+            sprite.scale.set(scale, scale, 1);
+            velocities[index] = {
+              x: (Math.random() - 0.5) * 0.02,
+              y: (Math.random() - 0.5) * 0.02,
+              z: (Math.random() - 0.5) * 0.02
+            };
+            // Per-emoji PNG selection
+            const resFolder = selectResolutionFolder(scale, sprite.position);
+            const filename = filteredFiles[index % filteredFiles.length];
+            sprite.material.map = getCachedTexture(filename, resFolder);
+            sprite.material.needsUpdate = true;
+          });
+        }
+      }
+      // Initial emoji load
+      await populateGroupDropdown(emojiSetFileSelect.value = emojiSetFiles[0]);
+      updateEmojis();
+
+      function animate() {
+        requestAnimationFrame(animate);
+        let time;
+        if (isRecording) {
+          time = frameCount / RECORD_FPS;
+        } else {
+          time = performance.now() * 0.001;
+        }
+        const rotationEnabled = rotationToggle.checked;
+        const easing = rotationEasing.value;
+        const pattern = rotationPattern.value;
+        const zoomEnabled = zoomToggle.checked;
+        const zoomEase = zoomEasing.value;
+        const zoomPat = zoomPattern.value;
+        const nodeAnimPattern = {
+          pos: nodeAnimPatternPos.value,
+          zoom: nodeAnimPatternZoom.value,
+          rot: nodeAnimPatternRot.value
+        };
+        const nodeAnimParams = {
+          pos: {
+            amp: parseFloat(nodeAnimPosAmp.value) || 0,
+            freq: parseFloat(nodeAnimPosFreq.value) || 1,
+            phase: parseFloat(nodeAnimPosPhase.value) || 0
+          },
+          zoom: {
+            amp: parseFloat(nodeAnimZoomAmp.value) || 0,
+            freq: parseFloat(nodeAnimZoomFreq.value) || 1,
+            phase: parseFloat(nodeAnimZoomPhase.value) || 0
+          },
+          rot: {
+            amp: parseFloat(nodeAnimRotAmp.value) || 0,
+            freq: parseFloat(nodeAnimRotFreq.value) || 1,
+            phase: parseFloat(nodeAnimRotPhase.value) || 0
+          }
+        };
+        const addendum = Math.max(1, Math.min(90, parseFloat(zoomAddendumInput.value) || 10));
+        const minZoom = (100 - addendum) / 100;
+        const maxZoom = (100 + addendum) / 100;
+        if (arrangeMode === 'random') {
+        sprites.forEach((sprite, index) => {
+            let speed = rotationSpeeds[index];
+            if (rotationEnabled) {
+              // Apply pattern
+              let factor = 1;
+              if (pattern === 'sin') {
+                factor = Math.sin(time + index);
+              } else if (pattern === 'pulse') {
+                factor = Math.abs(Math.sin(time * 2 + index));
+              } else if (pattern === 'ramp') {
+                factor = (Math.sin(time + index) + 1) / 2;
+              }
+              // Apply easing
+              let eased = factor;
+              if (easing === 'easeIn') {
+                eased = factor * factor;
+              } else if (easing === 'easeOut') {
+                eased = Math.sqrt(Math.max(0, factor));
+              } else if (easing === 'easeInOut') {
+                eased = factor < 0.5 ? 2 * factor * factor : 1 - Math.pow(-2 * factor + 2, 2) / 2;
+              }
+              // Clamp eased to a safe range
+              if (!isFinite(eased) || isNaN(eased)) eased = 0;
+              eased = Math.max(-10, Math.min(10, eased));
+              sprite.material.rotation += speed * eased * (parseFloat(rotationWeight.value) || 1);
+            } else {
+              // Do not rotate at all if disabled
+              // Optionally, you could set sprite.material.rotation = 0; if you want to reset
+            }
+            // Idle Zoom logic
+            if (zoomEnabled) {
+              let zfactor = 1;
+              if (zoomPat === 'sin') {
+                zfactor = (Math.sin(time * 2 + index) + 1) / 2;
+              } else if (zoomPat === 'pulse') {
+                zfactor = Math.abs(Math.sin(time * 4 + index));
+              } else if (zoomPat === 'ramp') {
+                zfactor = (Math.sin(time + index) + 1) / 2;
+              }
+              let zeased = zfactor;
+              if (zoomEase === 'easeIn') {
+                zeased = zfactor * zfactor;
+              } else if (zoomEase === 'easeOut') {
+                zeased = Math.sqrt(Math.max(0, zfactor));
+              } else if (zoomEase === 'easeInOut') {
+                zeased = zfactor < 0.5 ? 2 * zfactor * zfactor : 1 - Math.pow(-2 * zfactor + 2, 2) / 2;
+              }
+              if (!isFinite(zeased) || isNaN(zeased)) zeased = 0;
+              zeased = Math.max(0, Math.min(1, zeased));
+              // Base scale
+              let base = (arrangeMode === 'grid')
+                ? parseFloat(emojiSizeInput.value) || 1
+                : baseScales[index] || 1;
+              let scale = base * (minZoom + (maxZoom - minZoom) * zeased) * (parseFloat(zoomWeight.value) || 1);
+              scale = Math.max(base * 0.1, Math.min(base * 4, scale));
+              sprite.scale.set(scale, scale, 1);
+            }
+          sprite.position.x += velocities[index].x;
+          sprite.position.y += velocities[index].y;
+          sprite.position.z += velocities[index].z;
+          // Bounce off the box
+          if (sprite.position.x < -5 || sprite.position.x > 5) velocities[index].x *= -1;
+          if (sprite.position.y < -5 || sprite.position.y > 5) velocities[index].y *= -1;
+          if (sprite.position.z < -5 || sprite.position.z > 5) velocities[index].z *= -1;
+        });
+        } else {
+          sprites.forEach((sprite, index) => {
+            let speed = rotationSpeeds[index];
+            // Node animation pattern for grid (separate for pos/zoom/rot)
+            let dx = 0, dy = 0, dscale = 1, drot = 0;
+            if (sprite.userData.grid) {
+              const {row, col, x, y} = sprite.userData.grid;
+              // Position
+              if (nodeAnimPattern.pos !== 'none') {
+                let t = time * nodeAnimParams.pos.freq + nodeAnimParams.pos.phase;
+                if (nodeAnimPattern.pos === 'sine') {
+                  dx = Math.sin(t + row) * nodeAnimParams.pos.amp;
+                  dy = Math.sin(t + col) * nodeAnimParams.pos.amp;
+                } else if (nodeAnimPattern.pos === 'diagonal') {
+                  dx = Math.sin(t + row + col) * nodeAnimParams.pos.amp;
+                  dy = Math.sin(t + row - col) * nodeAnimParams.pos.amp;
+                } else if (nodeAnimPattern.pos === 'circular') {
+                  const angle = t + (row + col) * 0.2;
+                  dx = Math.cos(angle) * nodeAnimParams.pos.amp;
+                  dy = Math.sin(angle) * nodeAnimParams.pos.amp;
+                }
+              }
+              // Zoom
+              if (nodeAnimPattern.zoom !== 'none') {
+                let t = time * nodeAnimParams.zoom.freq + nodeAnimParams.zoom.phase;
+                if (nodeAnimPattern.zoom === 'sine') {
+                  dscale = 1 + nodeAnimParams.zoom.amp * Math.sin(t + row + col);
+                } else if (nodeAnimPattern.zoom === 'diagonal') {
+                  dscale = 1 + nodeAnimParams.zoom.amp * Math.sin(t + row * col * 0.1);
+                } else if (nodeAnimPattern.zoom === 'circular') {
+                  const angle = t + (row + col) * 0.2;
+                  dscale = 1 + nodeAnimParams.zoom.amp * Math.sin(angle);
+                }
+              }
+              // Rotation
+              if (nodeAnimPattern.rot !== 'none') {
+                let t = time * nodeAnimParams.rot.freq + nodeAnimParams.rot.phase;
+                if (nodeAnimPattern.rot === 'sine') {
+                  drot = nodeAnimParams.rot.amp * Math.sin(t + row - col);
+                } else if (nodeAnimPattern.rot === 'diagonal') {
+                  drot = nodeAnimParams.rot.amp * Math.sin(t + row * 0.5 + col * 0.5);
+                } else if (nodeAnimPattern.rot === 'circular') {
+                  const angle = t + (row + col) * 0.2;
+                  drot = nodeAnimParams.rot.amp * Math.cos(angle);
+                }
+              }
+              // Apply to position
+              sprite.position.x = x + dx;
+              sprite.position.y = y + dy;
+            }
+            if (rotationEnabled) {
+              let factor = 1;
+              if (pattern === 'sin') {
+                factor = Math.sin(time + index);
+              } else if (pattern === 'pulse') {
+                factor = Math.abs(Math.sin(time * 2 + index));
+              } else if (pattern === 'ramp') {
+                factor = (Math.sin(time + index) + 1) / 2;
+              }
+              let eased = factor;
+              if (easing === 'easeIn') {
+                eased = factor * factor;
+              } else if (easing === 'easeOut') {
+                eased = Math.sqrt(Math.max(0, factor));
+              } else if (easing === 'easeInOut') {
+                eased = factor < 0.5 ? 2 * factor * factor : 1 - Math.pow(-2 * factor + 2, 2) / 2;
+              }
+              if (!isFinite(eased) || isNaN(eased)) eased = 0;
+              eased = Math.max(-10, Math.min(10, eased));
+              sprite.material.rotation += speed * eased + drot;
+            } else {
+              // Do not rotate at all if disabled
+              // Optionally, you could set sprite.material.rotation = 0; if you want to reset
+            }
+            // Idle Zoom logic
+            if (zoomEnabled) {
+              let zfactor = 1;
+              if (zoomPat === 'sin') {
+                zfactor = (Math.sin(time * 2 + index) + 1) / 2;
+              } else if (zoomPat === 'pulse') {
+                zfactor = Math.abs(Math.sin(time * 4 + index));
+              } else if (zoomPat === 'ramp') {
+                zfactor = (Math.sin(time + index) + 1) / 2;
+              }
+              let zeased = zfactor;
+              if (zoomEase === 'easeIn') {
+                zeased = zfactor * zfactor;
+              } else if (zoomEase === 'easeOut') {
+                zeased = Math.sqrt(Math.max(0, zfactor));
+              } else if (zoomEase === 'easeInOut') {
+                zeased = zfactor < 0.5 ? 2 * zfactor * zfactor : 1 - Math.pow(-2 * zfactor + 2, 2) / 2;
+              }
+              if (!isFinite(zeased) || isNaN(zeased)) zeased = 0;
+              zeased = Math.max(0, Math.min(1, zeased));
+              let base = (arrangeMode === 'grid')
+                ? parseFloat(emojiSizeInput.value) || 1
+                : baseScales[index] || 1;
+              let scale = base * (minZoom + (maxZoom - minZoom) * zeased) * dscale;
+              scale = Math.max(base * 0.1, Math.min(base * 4, scale));
+              sprite.scale.set(scale, scale, 1);
+            }
+          });
+        }
+        // Postprocessing: use composer if bloom enabled, else normal render
+        if (isRecording && capturer) {
+          composer.render(renderer);
+          capturer.capture(renderer.domElement);
+          frameCount++;
+          const maxFrames = parseInt(document.getElementById('recordFramesInput').value) || 1;
+          if (frameCount >= maxFrames) {
+            stopRecording();
+          }
+        } else {
+          composer.render(renderer);
+        }
+        // Realtime per-emoji PNG resolution switching
+        sprites.forEach((sprite, index) => {
+          const scale = sprite.scale.x; // assume uniform scale
+          const pos = sprite.position;
+          // Use the filename from filteredFiles if available
+          let fallbackFilename = null;
+          if (typeof getFilenamesForCurrentGroup === 'function') {
+            const files = getFilenamesForCurrentGroup();
+            fallbackFilename = files[index % files.length];
+          }
+          const emojiFilename = sprite.userData && sprite.userData.filename ? sprite.userData.filename : fallbackFilename;
+          if (!emojiFilename) return;
+          const resFolder = selectResolutionFolder(scale, pos);
+          if (!spriteResFolders[index]) spriteResFolders[index] = null;
+          if (spriteResFolders[index] !== resFolder) {
+            sprite.material.map = getCachedTexture(emojiFilename, resFolder);
+            sprite.material.needsUpdate = true;
+            spriteResFolders[index] = resFolder;
+          }
+        });
+      }
+
+      animate();
+
+      resetRotationBtn.addEventListener('click', () => {
+        sprites.forEach(sprite => {
+          sprite.material.rotation = 0;
+        });
+      });
+
+      resetZoomBtn.addEventListener('click', () => {
+        sprites.forEach((sprite, index) => {
+          // Reset to base scale (grid or random)
+          if (arrangeMode === 'grid') {
+            const emojiScale = parseFloat(emojiSizeInput.value) || 1;
+            sprite.scale.set(emojiScale, emojiScale, 1);
+          } else {
+            const scale = baseScales[index] || 1;
+            sprite.scale.set(scale, scale, 1);
+          }
+        });
+      });
+
+      // Enable Bootstrap tooltips for Node Animation Patterns
+      document.querySelectorAll('#nodeAnimPatternPos, #nodeAnimPatternZoom, #nodeAnimPatternRot, #nodeAnimPosAmp, #nodeAnimPosFreq, #nodeAnimPosPhase, #nodeAnimZoomAmp, #nodeAnimZoomFreq, #nodeAnimZoomPhase, #nodeAnimRotAmp, #nodeAnimRotFreq, #nodeAnimRotPhase').forEach(el => {
+        el.setAttribute('data-bs-toggle', 'tooltip');
+      });
+      document.getElementById('nodeAnimPatternPos').setAttribute('title', 'Pattern for position animation');
+      document.getElementById('nodeAnimPatternZoom').setAttribute('title', 'Pattern for zoom animation');
+      document.getElementById('nodeAnimPatternRot').setAttribute('title', 'Pattern for rotation animation');
+      document.getElementById('nodeAnimPosAmp').setAttribute('title', 'Amplitude for position animation');
+      document.getElementById('nodeAnimPosFreq').setAttribute('title', 'Frequency for position animation');
+      document.getElementById('nodeAnimPosPhase').setAttribute('title', 'Phase for position animation');
+      document.getElementById('nodeAnimZoomAmp').setAttribute('title', 'Amplitude for zoom animation');
+      document.getElementById('nodeAnimZoomFreq').setAttribute('title', 'Frequency for zoom animation');
+      document.getElementById('nodeAnimZoomPhase').setAttribute('title', 'Phase for zoom animation');
+      document.getElementById('nodeAnimRotAmp').setAttribute('title', 'Amplitude for rotation animation');
+      document.getElementById('nodeAnimRotFreq').setAttribute('title', 'Frequency for rotation animation');
+      document.getElementById('nodeAnimRotPhase').setAttribute('title', 'Phase for rotation animation');
+      var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+      tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+      });
+
+      // Recording time/frames sync logic
+      const recordDurationInput = document.getElementById('recordDurationInput');
+      const recordFramesInput = document.getElementById('recordFramesInput');
+      function parseDuration(str) {
+        const m = str.match(/^(\d{1,2}):(\d{2})$/);
+        if (!m) return 0;
+        return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+      }
+      function formatDuration(secs) {
+        const m = Math.floor(secs / 60);
+        const s = secs % 60;
+        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+      }
+      function syncRecordTimeFields(changed) {
+        const fps = parseInt(document.getElementById('fpsInput').value) || 60;
+        if (changed === 'duration') {
+          const secs = parseDuration(recordDurationInput.value);
+          const frames = Math.round(secs * fps);
+          recordFramesInput.value = frames;
+        } else if (changed === 'frames') {
+          const frames = parseInt(recordFramesInput.value) || 1;
+          const secs = Math.round(frames / fps);
+          recordDurationInput.value = formatDuration(secs);
+        } else if (changed === 'fps') {
+          // Recalculate frames from duration
+          const secs = parseDuration(recordDurationInput.value);
+          recordFramesInput.value = Math.round(secs * fps);
+        }
+      }
+      recordDurationInput.addEventListener('change', () => syncRecordTimeFields('duration'));
+      recordFramesInput.addEventListener('change', () => syncRecordTimeFields('frames'));
+      // Initialize
+      syncRecordTimeFields('duration');
+
+      // Add a cache for last used resolution folder per sprite
+      let spriteResFolders = [];
+
+      // Add global variable for alignment object mesh
+      let alignmentObjectMesh = null;
+
+      // Always define pattern before using it
+      const pattern = gridPatternSelect.value;
+      // In arrangeSprites, after arranging emojis, update or create the alignment object mesh for 3D patterns
+      if (['swirl','torus','spiral','sphere'].includes(pattern)) {
+        if (alignmentObjectMesh) scene.remove(alignmentObjectMesh);
+        if (pattern === 'torus') {
+          const geometry = new THREE.TorusGeometry(4, 1.2, 32, 100);
+          const mat = new THREE.MeshBasicMaterial({ color: 0x00ffcc, wireframe: true });
+          alignmentObjectMesh = new THREE.Mesh(geometry, mat);
+        } else if (pattern === 'sphere') {
+          const geometry = new THREE.SphereGeometry(5, 32, 32);
+          const mat = new THREE.MeshBasicMaterial({ color: 0x00ffcc, wireframe: true });
+          alignmentObjectMesh = new THREE.Mesh(geometry, mat);
+        } else if (pattern === 'swirl' || pattern === 'spiral') {
+          // Use a tube along a helix/spiral path
+          const curve = new THREE.CurvePath();
+          const turns = pattern === 'swirl' ? 2 : 3;
+          const points = [];
+          for (let i = 0; i < 100; i++) {
+            const t = i / 99;
+            const angle = t * turns * Math.PI * 2;
+            const radius = pattern === 'swirl' ? 4 : (1 + 4 * t);
+            const height = 6 * (t - 0.5);
+            const x = Math.cos(angle) * radius;
+            const y = height;
+            const z = Math.sin(angle) * radius;
+            points.push(new THREE.Vector3(x, y, z));
+          }
+          const curve3 = new THREE.CatmullRomCurve3(points);
+          const geometry = new THREE.TubeGeometry(curve3, 100, 0.15, 8, false);
+          const mat = new THREE.MeshBasicMaterial({ color: 0x00ffcc, wireframe: true });
+          alignmentObjectMesh = new THREE.Mesh(geometry, mat);
+        }
+        if (alignmentObjectMesh) {
+          alignmentObjectMesh.visible = document.getElementById('showAlignmentObjectToggle').checked;
+          scene.add(alignmentObjectMesh);
+        }
+      } else {
+        if (alignmentObjectMesh) {
+          scene.remove(alignmentObjectMesh);
+          alignmentObjectMesh = null;
+        }
+      }
+
+      document.getElementById('showAlignmentObjectToggle').addEventListener('change', () => {
+        if (alignmentObjectMesh) alignmentObjectMesh.visible = document.getElementById('showAlignmentObjectToggle').checked;
+      });
+    }
+
+    // Move getSurfaceNormal definition here, before arrangeSprites
+    function getSurfaceNormal(pattern, x, y, z, t, phi) {
+      if (pattern === 'swirl' || pattern === 'spiral') {
+        // Helix/spiral: normal is radial from axis
+        const center = new THREE.Vector3(0, y, 0);
+        const pos = new THREE.Vector3(x, y, z);
+        return pos.clone().sub(center).normalize();
+      } else if (pattern === 'torus') {
+        // Torus: normal is from center of tube
+        const R = 4, r = 1.2;
+        const angle = t * Math.PI * 2;
+        const phi = t * Math.PI * 4;
+        const cx = Math.cos(angle) * R;
+        const cz = Math.sin(angle) * R;
+        const tubeCenter = new THREE.Vector3(cx, 0, cz);
+        const pos = new THREE.Vector3(x, y, z);
+        return pos.clone().sub(tubeCenter).normalize();
+      } else if (pattern === 'sphere') {
+        // Sphere: normal is from center
+        return new THREE.Vector3(x, y, z).normalize();
+      }
+      return null;
+    }
+
+    main();
+  </script>
+</body>
+</html> 
